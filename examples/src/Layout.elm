@@ -1,10 +1,10 @@
-module Examples.Layout exposing (example)
+module Layout exposing (example)
 
 import Css exposing (num, px, zero)
-import Examples.Theme as Theme
 import Html.Styled as Html exposing (Html)
 import Html.Styled.Attributes exposing (disabled)
 import Html.Styled.Events exposing (onClick)
+import Theme
 
 
 type alias ExampleConfig msg =

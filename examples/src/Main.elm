@@ -6,10 +6,10 @@ import Browser
 import Css exposing (auto, hex, pct, px, qt, solid, vh, zero)
 import Css.Global exposing (global, html)
 import Examples.Basic as Basic
-import Examples.Layout
-import Examples.Theme as Theme
 import Examples.Times as Times
 import Html.Styled as Html exposing (Html)
+import Layout
+import Theme as Theme
 import Typewriter
 
 
@@ -20,21 +20,33 @@ type alias Model =
     }
 
 
-init : Model
+init : ( Model, Cmd Msg )
 init =
-    { title =
-        Typewriter.init
-            { words =
-                [ "A Small Library!"
-                , "Written In Elm!"
-                , "Not Another JS Framework."
-                , "Not Made With Love."
-                ]
-            , iterationCount = Typewriter.infinite
-            }
-    , basic = Basic.init
-    , times = Times.init
-    }
+    let
+        ( title, titleCmd ) =
+            Typewriter.init
+                { words =
+                    [ "A Small Library!"
+                    , "Written In Elm!"
+                    , "Not Another JS Framework."
+                    , "Not Made With Love."
+                    ]
+                , iterations = Typewriter.infinite
+                }
+
+        ( basic, basicCmd ) =
+            Basic.init
+
+        ( times, timesCmd ) =
+            Times.init
+    in
+    ( { title = title, basic = basic, times = times }
+    , Cmd.batch
+        [ Cmd.map TitleMsg titleCmd
+        , Cmd.map BasicMsg basicCmd
+        , Cmd.map TimesMsg timesCmd
+        ]
+    )
 
 
 view : Model -> Html Msg
@@ -90,29 +102,29 @@ type Msg
     | TimesMsg Times.Msg
 
 
-update : Msg -> Model -> Model
+update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
     case msg of
         TitleMsg typewriterMsg ->
-            { model
-                | title =
+            let
+                ( title, cmd ) =
                     Typewriter.update typewriterMsg model.title
-            }
+            in
+            ( { model | title = title }, Cmd.map TitleMsg cmd )
 
         BasicMsg basicMsg ->
-            { model | basic = Basic.update basicMsg model.basic }
+            let
+                ( basic, cmd ) =
+                    Basic.update basicMsg model.basic
+            in
+            ( { model | basic = basic }, Cmd.map BasicMsg cmd )
 
         TimesMsg timesMsg ->
-            { model | times = Times.update timesMsg model.times }
-
-
-subscriptions : Model -> Sub Msg
-subscriptions model =
-    Sub.batch
-        [ Sub.map TitleMsg <| Typewriter.subscriptions model.title
-        , Sub.map BasicMsg <| Basic.subscriptions model.basic
-        , Sub.map TimesMsg <| Times.subscriptions model.times
-        ]
+            let
+                ( times, cmd ) =
+                    Times.update timesMsg model.times
+            in
+            ( { model | times = times }, Cmd.map TimesMsg cmd )
 
 
 
@@ -122,8 +134,8 @@ subscriptions model =
 main : Program () Model Msg
 main =
     Browser.element
-        { init = \_ -> ( init, Cmd.none )
+        { init = \_ -> init
         , view = view >> Html.toUnstyled
-        , update = \msg model -> ( update msg model, Cmd.none )
-        , subscriptions = subscriptions
+        , update = update
+        , subscriptions = \_ -> Sub.none
         }

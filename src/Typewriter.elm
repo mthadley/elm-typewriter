@@ -1,5 +1,5 @@
 module Typewriter exposing
-    ( Model, Config, init, view, Msg, update, subscriptions
+    ( Model, Config, init, view, Msg, update
     , IterationCount, infinite, times
     , togglePlay, isPaused, isDone, restart
     )
@@ -9,7 +9,7 @@ module Typewriter exposing
 
 # Basics
 
-@docs Model, Config, init, view, Msg, update, subscriptions
+@docs Model, Config, init, view, Msg, update
 
 
 # Controlling Iterations
@@ -24,7 +24,9 @@ module Typewriter exposing
 -}
 
 import List.Zipper as Zipper exposing (Zipper)
-import Time
+import Process
+import Random
+import Task
 
 
 
@@ -38,19 +40,20 @@ type Model
         { mode : Mode
         , words : Zipper String
         , currentIteration : IterationCount
-        , iterationCount : IterationCount
+        , iterations : IterationCount
+        , delayCoeff : Float
         }
 
 
 {-| The settings for the typewriter.
 
-`iterationCount` can be used to control how many times the typewriter will
+`iterations` can be used to control how many times the typewriter will
 play. See [`IterationCount`](#IterationCount).
 
 -}
 type alias Config =
     { words : List String
-    , iterationCount : IterationCount
+    , iterations : IterationCount
     }
 
 
@@ -79,15 +82,26 @@ times =
 
 
 {-| Create a new typewriter model from some settings. See [`Config`](#Config).
--}
-init : Config -> Model
-init config =
-    Model
-        { mode = Typing 0
-        , words = Zipper.fromList config.words |> Zipper.withDefault ""
-        , iterationCount = config.iterationCount
-        , currentIteration = config.iterationCount
+
+    Typewriter.init
+        { words = [ "First", "Second", "Third" ]
+        , iterations = Typewriter.infinite
         }
+
+-}
+init : Config -> ( Model, Cmd Msg )
+init config =
+    let
+        model =
+            Model
+                { mode = Typing 0
+                , words = Zipper.fromList config.words |> Zipper.withDefault ""
+                , iterations = config.iterations
+                , currentIteration = config.iterations
+                , delayCoeff = 1
+                }
+    in
+    ( model, schedule model )
 
 
 type Mode
@@ -103,13 +117,24 @@ type Mode
 -}
 type Msg
     = NextStep
+    | UpdateCoeff Float
 
 
 {-| Make sure to call this `update` in your own `update` to make
 the typewriter type!
 -}
-update : Msg -> Model -> Model
-update NextStep (Model info) =
+update : Msg -> Model -> ( Model, Cmd Msg )
+update msg ((Model info) as model) =
+    case msg of
+        NextStep ->
+            ( nextStep model, schedule model )
+
+        UpdateCoeff coeff ->
+            ( Model { info | delayCoeff = coeff }, Cmd.none )
+
+
+nextStep : Model -> Model
+nextStep (Model info) =
     Model <|
         case info.mode of
             Typing count ->
@@ -188,36 +213,38 @@ view (Model ({ mode, words } as info)) =
             view <| Model <| { info | mode = pausedMode }
 
 
-{-| If you don't see anything hapening, it may be because you forgot
-to wire up these subscriptions. You'll need `Sub.map`:
-
-    Sub.map TypewriterMsg <| Typewriter.subscriptions typewriterModel
-
--}
-subscriptions : Model -> Sub Msg
-subscriptions (Model { mode }) =
+schedule : Model -> Cmd Msg
+schedule (Model { mode, delayCoeff }) =
     let
-        step interval =
-            Time.every interval (\_ -> NextStep)
+        stepAfter interval =
+            Process.sleep (interval * delayCoeff)
+                |> Task.perform (\_ -> NextStep)
+                |> (\cmd -> Cmd.batch [ cmd, randomCoeff ])
     in
     case mode of
         Typing _ ->
-            step 100
+            stepAfter 100
 
         FinishedWord ->
-            step 300
+            stepAfter 300
 
         Deleting _ ->
-            step 50
+            stepAfter 50
 
         Next ->
-            step 500
+            stepAfter 500
 
         Done _ ->
-            Sub.none
+            Cmd.none
 
         Paused _ ->
-            Sub.none
+            Cmd.none
+
+
+randomCoeff : Cmd Msg
+randomCoeff =
+    Random.float 0.8 1.2
+        |> Random.generate UpdateCoeff
 
 
 
@@ -228,14 +255,18 @@ subscriptions (Model { mode }) =
 then this will pause it. If it is already paused, then it will resume playing.
 You can check if it is currently paused or playing using [`isPaused`](#isPaused).
 -}
-togglePlay : Model -> Model
+togglePlay : Model -> ( Model, Cmd Msg )
 togglePlay (Model info) =
     case info.mode of
         Paused mode ->
-            Model { info | mode = mode }
+            let
+                model =
+                    Model { info | mode = mode }
+            in
+            ( model, schedule model )
 
         mode ->
-            Model { info | mode = mode }
+            ( Model { info | mode = mode }, Cmd.none )
 
 
 {-| Returns true if the typewriter is paused.
@@ -251,7 +282,7 @@ isPaused (Model { mode }) =
 
 
 {-| Retuorns true if this typewriter has no more things to type! This
-will never return false if the [`iterationCount`](#Config) was set to
+will never return false if the [`iterations`](#Config) was set to
 infinite.
 -}
 isDone : Model -> Bool
@@ -271,11 +302,15 @@ isDone (Model { mode }) =
 a typewriter that is "done", and you want it to start typing from the
 beginning.
 -}
-restart : Model -> Model
+restart : Model -> ( Model, Cmd Msg )
 restart (Model info) =
-    Model
-        { info
-            | words = Zipper.first info.words
-            , mode = Typing 0
-            , currentIteration = info.iterationCount
-        }
+    let
+        model =
+            Model
+                { info
+                    | words = Zipper.first info.words
+                    , mode = Typing 0
+                    , currentIteration = info.iterations
+                }
+    in
+    ( model, schedule model )

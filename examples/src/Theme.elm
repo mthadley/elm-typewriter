@@ -1,4 +1,4 @@
-module Examples.Theme exposing (borderRadius, lighter, primary, secondary)
+module Theme exposing (borderRadius, lighter, primary, secondary)
 
 import Css exposing (Color, hex, px)
 

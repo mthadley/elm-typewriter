@@ -1,7 +1,7 @@
-module Examples.Times exposing (Model, Msg, init, subscriptions, update, view)
+module Examples.Times exposing (Model, Msg, init, update, view)
 
-import Examples.Layout as Layout
 import Html.Styled exposing (Html)
+import Layout
 import Typewriter
 
 
@@ -9,12 +9,13 @@ type alias Model =
     Typewriter.Model
 
 
-init : Model
+init : ( Model, Cmd Msg )
 init =
     Typewriter.init
         { words = [ "First Phrase", "Last Phrase" ]
-        , iterationCount = Typewriter.times 2
+        , iterations = Typewriter.times 2
         }
+        |> Tuple.mapSecond (Cmd.map TypewriterMsg)
 
 
 view : Model -> Html Msg
@@ -37,19 +38,16 @@ type Msg
     | Replay
 
 
-update : Msg -> Model -> Model
+update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
     case msg of
         TypewriterMsg typewriterMsg ->
             Typewriter.update typewriterMsg model
+                |> Tuple.mapSecond (Cmd.map TypewriterMsg)
 
         Replay ->
             Typewriter.restart model
-
-
-subscriptions : Model -> Sub Msg
-subscriptions model =
-    Sub.map TypewriterMsg <| Typewriter.subscriptions model
+                |> Tuple.mapSecond (Cmd.map TypewriterMsg)
 
 
 code : String
