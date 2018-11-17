@@ -5,7 +5,8 @@ module Typewriter exposing
     , togglePlay, isPaused, isDone, restart
     )
 
-{-|
+{-| This module follows the Elm Architecture. If you are new, it's definitely a good
+idea to start by reading the [Official Guide](https://guide.elm-lang.org/architecture/).
 
 
 # Basics
@@ -61,6 +62,13 @@ type alias ConfigInfo =
 [`iterations`](#iterations). You can then initialize your typewriter by
 passing your `Config` to [`init`](#init).
 
+    Typewriter.withWords [ "Supercalifragilisticexpialidocious" ]
+        |> Typewriter.iterations (Typewriter.times 3)
+        |> Typewriter.withTypeDelay 600
+        |> Typewriter.withBackspaceDelay 10
+        |> Typewriter.withJitter (Random.float 0.5 1.5)
+        |> Typewriter.init
+
 See [Customizing](#Customizing).
 
 -}
@@ -69,7 +77,7 @@ type Config
 
 
 {-| Initialize your typewriter [`Config`](#config) with the words you
-want it to type.
+want it to type. This is the only way to create a [`Config`](#Config)!
 -}
 withWords : List String -> Config
 withWords words =
@@ -157,12 +165,12 @@ times =
     Times << max 0
 
 
-{-| Create a new typewriter model from some settings. See [`Config`](#Config).
+{-| Create a new typewriter model from some settings.
 
-    Typewriter.init
-        { words = [ "First", "Second", "Third" ]
-        , iterations = Typewriter.infinite
-        }
+    Typewriter.withWords [ "Let's get typing!" ]
+        |> Typwriter.init
+
+See [`Config`](#Config) for more ways to customize it's behavior.
 
 -}
 init : Config -> ( Model, Cmd Msg )
@@ -265,7 +273,8 @@ currentWordLength =
     String.length << Zipper.current
 
 
-{-| The view function. Make sure to pass the model here!
+{-| The view function. We just give you the String, so you can render it in
+whatever way makes sense for your application.
 -}
 view : Model -> String
 view (Model ({ mode, words } as info)) =
@@ -328,7 +337,9 @@ schedule (Model { mode, config, delayCoeff }) =
 
 {-| Toggles the playing state of the typewriter. If it is currently playing,
 then this will pause it. If it is already paused, then it will resume playing.
+
 You can check if it is currently paused or playing using [`isPaused`](#isPaused).
+
 -}
 togglePlay : Model -> ( Model, Cmd Msg )
 togglePlay (Model info) =
@@ -345,6 +356,12 @@ togglePlay (Model info) =
 
 
 {-| Returns true if the typewriter is paused.
+
+    Typewriter.withWords [ "Type", "Forever" ]
+        |> Typwriter.init
+        |> Typewriter.isPaused
+        |> Expect.equal False
+
 -}
 isPaused : Model -> Bool
 isPaused (Model { mode }) =
