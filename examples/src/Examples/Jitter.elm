@@ -1,7 +1,9 @@
-module Examples.Times exposing (Model, Msg, init, update, view)
+module Examples.Jitter exposing (Model, Msg, init, update, view)
 
 import Html.Styled exposing (Html)
 import Layout
+import Random
+import Random.Extra
 import Typewriter
 
 
@@ -11,22 +13,21 @@ type alias Model =
 
 init : ( Model, Cmd Msg )
 init =
-    Typewriter.withWords [ "First Phrase", "Last Phrase" ]
-        |> Typewriter.iterations (Typewriter.times 2)
+    Typewriter.withWords [ "Maybe I drank too much soda this morning..." ]
+        |> Typewriter.withJitter
+            (Random.Extra.frequency
+                ( 10, Random.constant 1 )
+                [ ( 1, Random.constant 15 ) ]
+            )
         |> Typewriter.init
         |> Tuple.mapSecond (Cmd.map TypewriterMsg)
 
 
-view : Model -> Html Msg
+view : Model -> Html msg
 view model =
     Layout.example
-        { title = "Just a Few"
-        , buttons =
-            [ { label = "Replay"
-              , disabled = not (Typewriter.isDone model)
-              , onClick = Replay
-              }
-            ]
+        { title = "Hiccups"
+        , buttons = []
         , code = code
         , text = Typewriter.view model
         }
@@ -34,7 +35,6 @@ view model =
 
 type Msg
     = TypewriterMsg Typewriter.Msg
-    | Replay
 
 
 update : Msg -> Model -> ( Model, Cmd Msg )
@@ -44,15 +44,15 @@ update msg model =
             Typewriter.update typewriterMsg model
                 |> Tuple.mapSecond (Cmd.map TypewriterMsg)
 
-        Replay ->
-            Typewriter.restart model
-                |> Tuple.mapSecond (Cmd.map TypewriterMsg)
-
 
 code : String
 code =
     """
-    Typewriter.withWords [ "First Phrase", "Last Phrase" ]
-        |> Typewriter.iterations (Typewriter.times 2)
+    Typewriter.withWords [ "Maybe I drank too much soda this morning..." ]
+        |> Typewriter.withJitter
+            (Random.Extra.frequency
+                ( 10, Random.constant 1 )
+                [ ( 1, Random.constant 15 ) ]
+            )
         |> Typewriter.init
     """

@@ -1,6 +1,7 @@
 module Typewriter exposing
-    ( Model, Config, init, view, Msg, update
-    , IterationCount, infinite, times
+    ( Model, Config, withWords, init, view, Msg, update
+    , iterations, withTypeDelay, withBackspaceDelay, withJitter
+    , Iterations, infinite, times
     , togglePlay, isPaused, isDone, restart
     )
 
@@ -9,12 +10,13 @@ module Typewriter exposing
 
 # Basics
 
-@docs Model, Config, init, view, Msg, update
+@docs Model, Config, withWords, init, view, Msg, update
 
 
-# Controlling Iterations
+# Customizing
 
-@docs IterationCount, infinite, times
+@docs iterations, withTypeDelay, withBackspaceDelay, withJitter
+@docs Iterations, infinite, times
 
 
 # Utilities
@@ -25,7 +27,7 @@ module Typewriter exposing
 
 import List.Zipper as Zipper exposing (Zipper)
 import Process
-import Random
+import Random exposing (Generator)
 import Task
 
 
@@ -39,27 +41,101 @@ type Model
     = Model
         { mode : Mode
         , words : Zipper String
-        , currentIteration : IterationCount
-        , iterations : IterationCount
+        , currentIteration : Iterations
+        , config : ConfigInfo
         , delayCoeff : Float
         }
 
 
-{-| The settings for the typewriter.
+type alias ConfigInfo =
+    { words : List String
+    , iterations : Iterations
+    , typeDelay : Int
+    , backspaceDelay : Int
+    , jitter : Generator Float
+    }
 
-`iterations` can be used to control how many times the typewriter will
-play. See [`IterationCount`](#IterationCount).
+
+{-| The settings for the typewriter. You can create one of these using
+[`withWords`](#withWords), and then customize it using functions like
+[`iterations`](#iterations). You can then initialize your typewriter by
+passing your `Config` to [`init`](#init).
+
+See [Customizing](#Customizing).
 
 -}
-type alias Config =
-    { words : List String
-    , iterations : IterationCount
-    }
+type Config
+    = Config ConfigInfo
+
+
+{-| Initialize your typewriter [`Config`](#config) with the words you
+want it to type.
+-}
+withWords : List String -> Config
+withWords words =
+    Config
+        { words = words
+        , iterations = infinite
+        , typeDelay = 100
+        , backspaceDelay = 50
+        , jitter = Random.float 0.8 1.2
+        }
+
+
+{-| Change the amount of time between each key typed. This should specified
+in **milliseconds**.
+
+Note that this only affects how fast characters are deleted, and not how fast they
+are _deleted_. For that, see [`withBackspaceDelay`](#withBackspaceDelay).
+
+-}
+withTypeDelay : Int -> Config -> Config
+withTypeDelay delay (Config config) =
+    Config { config | typeDelay = delay }
+
+
+{-| Change the amount of time between each character deleted. This should specified
+in **milliseconds**.
+-}
+withBackspaceDelay : Int -> Config -> Config
+withBackspaceDelay delay (Config config) =
+    Config { config | backspaceDelay = delay }
+
+
+{-| Provide a generator that produces floats, that will be used to calculate the delay
+in the next step of the typing process. The float is used as a coefficient with the delay
+configured for that step.
+
+If generator produces `0.5`, then the next step will be twice as fast. Conversely, if it
+were to produce `2.0`, then that next step will take twice as long.
+
+    Typewriter.withWords [ "I'm", "All", "Over", "The", "Place" ]
+        |> Typwriter.withJitter (Random.float 0.1 20)
+        |> Typwriter.init
+
+-}
+withJitter : Generator Float -> Config -> Config
+withJitter jitter (Config config) =
+    Config { config | jitter = jitter }
+
+
+{-| Controls how many times the typwriter will run through it's script
+of words. By default it will type infinitely, but you can also constrain
+it. See [`times`](#times).
+
+    Typewriter.withWords [ "Type", "Forever" ]
+        |> Typwriter.iterations Typewriter.infinite
+        |> Typwriter.init
+
+-}
+iterations : Iterations -> Config -> Config
+iterations value (Config config) =
+    Config { config | iterations = value }
 
 
 {-| Controls how many times the typewriter will play.
 -}
-type IterationCount
+type Iterations
     = Infinite
     | Times Int
 
@@ -67,7 +143,7 @@ type IterationCount
 {-| The typewriter will continuously type it's list of words, starting
 from the beginning after it finishes it's last word.
 -}
-infinite : IterationCount
+infinite : Iterations
 infinite =
     Infinite
 
@@ -76,9 +152,9 @@ infinite =
 amount of times, and then stop. There is a minimum of at least one
 iteration, so for any value `n` where `n < 1`, it will be treated as `1`.
 -}
-times : Int -> IterationCount
+times : Int -> Iterations
 times =
-    Times << max 1
+    Times << max 0
 
 
 {-| Create a new typewriter model from some settings. See [`Config`](#Config).
@@ -90,13 +166,13 @@ times =
 
 -}
 init : Config -> ( Model, Cmd Msg )
-init config =
+init (Config config) =
     let
         model =
             Model
                 { mode = Typing 0
                 , words = Zipper.fromList config.words |> Zipper.withDefault ""
-                , iterations = config.iterations
+                , config = config
                 , currentIteration = config.iterations
                 , delayCoeff = 1
                 }
@@ -214,22 +290,27 @@ view (Model ({ mode, words } as info)) =
 
 
 schedule : Model -> Cmd Msg
-schedule (Model { mode, delayCoeff }) =
+schedule (Model { mode, config, delayCoeff }) =
     let
         stepAfter interval =
             Process.sleep (interval * delayCoeff)
                 |> Task.perform (\_ -> NextStep)
-                |> (\cmd -> Cmd.batch [ cmd, randomCoeff ])
+                |> (\cmd ->
+                        Cmd.batch
+                            [ cmd
+                            , Random.generate UpdateCoeff config.jitter
+                            ]
+                   )
     in
     case mode of
         Typing _ ->
-            stepAfter 100
+            stepAfter (toFloat config.typeDelay)
 
         FinishedWord ->
             stepAfter 300
 
         Deleting _ ->
-            stepAfter 50
+            stepAfter (toFloat config.backspaceDelay)
 
         Next ->
             stepAfter 500
@@ -239,12 +320,6 @@ schedule (Model { mode, delayCoeff }) =
 
         Paused _ ->
             Cmd.none
-
-
-randomCoeff : Cmd Msg
-randomCoeff =
-    Random.float 0.8 1.2
-        |> Random.generate UpdateCoeff
 
 
 
@@ -310,7 +385,7 @@ restart (Model info) =
                 { info
                     | words = Zipper.first info.words
                     , mode = Typing 0
-                    , currentIteration = info.iterations
+                    , currentIteration = info.config.iterations
                 }
     in
     ( model, schedule model )

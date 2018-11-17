@@ -11,14 +11,12 @@ type alias Model =
 
 init : ( Model, Cmd Msg )
 init =
-    Typewriter.init
-        { words = [ "one", "two", "three" ]
-        , iterations = Typewriter.infinite
-        }
+    Typewriter.withWords [ "one", "two", "three" ]
+        |> Typewriter.init
         |> Tuple.mapSecond (Cmd.map TypewriterMsg)
 
 
-view : Model -> Html Msg
+view : Model -> Html msg
 view model =
     Layout.example
         { title = "Basic"
@@ -43,8 +41,6 @@ update msg model =
 code : String
 code =
     """
-    Typewriter.init
-        { words = ["one", "two", "three"]
-        , iterationCount = Typewriter.infinite
-        }
+    Typewriter.withWords [ "one", "two", "three" ]
+        |> Typewriter.init
     """

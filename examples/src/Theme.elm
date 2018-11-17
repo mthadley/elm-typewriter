@@ -1,4 +1,10 @@
-module Theme exposing (borderRadius, lighter, primary, secondary)
+module Theme exposing
+    ( accent
+    , borderRadius
+    , lighter
+    , primary
+    , secondary
+    )
 
 import Css exposing (Color, hex, px)
 
@@ -15,7 +21,12 @@ primary =
 
 lighter : Color
 lighter =
-    hex "#62615D"
+    hex "62615D"
+
+
+accent : Color
+accent =
+    hex "FF5050"
 
 
 borderRadius : Css.Style

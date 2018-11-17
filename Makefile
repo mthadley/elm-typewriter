@@ -2,7 +2,7 @@ ELM_FILES = $(shell find src -iname "*.elm")
 EXAMPLE_FILES = $(shell find examples/src)
 
 .PHONY: all
-all: build examples
+all: docs documentation.json
 
 .PHONY: clean
 clean:
@@ -17,3 +17,6 @@ node_modules: package.json
 
 docs: node_modules $(ELM_FILES) $(EXAMPLE_FILES)
 	cd examples; npx elm make --optimize --output=../$@/index.html src/Main.elm
+
+documentation.json: $(ELM_Files)
+	npx elm make --docs=$@

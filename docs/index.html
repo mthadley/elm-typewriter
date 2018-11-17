@@ -90,6 +90,271 @@ function A9(fun, a, b, c, d, e, f, g, h, i) {
 
 
 
+var _List_Nil = { $: 0 };
+var _List_Nil_UNUSED = { $: '[]' };
+
+function _List_Cons(hd, tl) { return { $: 1, a: hd, b: tl }; }
+function _List_Cons_UNUSED(hd, tl) { return { $: '::', a: hd, b: tl }; }
+
+
+var _List_cons = F2(_List_Cons);
+
+function _List_fromArray(arr)
+{
+	var out = _List_Nil;
+	for (var i = arr.length; i--; )
+	{
+		out = _List_Cons(arr[i], out);
+	}
+	return out;
+}
+
+function _List_toArray(xs)
+{
+	for (var out = []; xs.b; xs = xs.b) // WHILE_CONS
+	{
+		out.push(xs.a);
+	}
+	return out;
+}
+
+var _List_map2 = F3(function(f, xs, ys)
+{
+	for (var arr = []; xs.b && ys.b; xs = xs.b, ys = ys.b) // WHILE_CONSES
+	{
+		arr.push(A2(f, xs.a, ys.a));
+	}
+	return _List_fromArray(arr);
+});
+
+var _List_map3 = F4(function(f, xs, ys, zs)
+{
+	for (var arr = []; xs.b && ys.b && zs.b; xs = xs.b, ys = ys.b, zs = zs.b) // WHILE_CONSES
+	{
+		arr.push(A3(f, xs.a, ys.a, zs.a));
+	}
+	return _List_fromArray(arr);
+});
+
+var _List_map4 = F5(function(f, ws, xs, ys, zs)
+{
+	for (var arr = []; ws.b && xs.b && ys.b && zs.b; ws = ws.b, xs = xs.b, ys = ys.b, zs = zs.b) // WHILE_CONSES
+	{
+		arr.push(A4(f, ws.a, xs.a, ys.a, zs.a));
+	}
+	return _List_fromArray(arr);
+});
+
+var _List_map5 = F6(function(f, vs, ws, xs, ys, zs)
+{
+	for (var arr = []; vs.b && ws.b && xs.b && ys.b && zs.b; vs = vs.b, ws = ws.b, xs = xs.b, ys = ys.b, zs = zs.b) // WHILE_CONSES
+	{
+		arr.push(A5(f, vs.a, ws.a, xs.a, ys.a, zs.a));
+	}
+	return _List_fromArray(arr);
+});
+
+var _List_sortBy = F2(function(f, xs)
+{
+	return _List_fromArray(_List_toArray(xs).sort(function(a, b) {
+		return _Utils_cmp(f(a), f(b));
+	}));
+});
+
+var _List_sortWith = F2(function(f, xs)
+{
+	return _List_fromArray(_List_toArray(xs).sort(function(a, b) {
+		var ord = A2(f, a, b);
+		return ord === elm$core$Basics$EQ ? 0 : ord === elm$core$Basics$LT ? -1 : 1;
+	}));
+});
+
+
+
+// EQUALITY
+
+function _Utils_eq(x, y)
+{
+	for (
+		var pair, stack = [], isEqual = _Utils_eqHelp(x, y, 0, stack);
+		isEqual && (pair = stack.pop());
+		isEqual = _Utils_eqHelp(pair.a, pair.b, 0, stack)
+		)
+	{}
+
+	return isEqual;
+}
+
+function _Utils_eqHelp(x, y, depth, stack)
+{
+	if (depth > 100)
+	{
+		stack.push(_Utils_Tuple2(x,y));
+		return true;
+	}
+
+	if (x === y)
+	{
+		return true;
+	}
+
+	if (typeof x !== 'object' || x === null || y === null)
+	{
+		typeof x === 'function' && _Debug_crash(5);
+		return false;
+	}
+
+	/**_UNUSED/
+	if (x.$ === 'Set_elm_builtin')
+	{
+		x = elm$core$Set$toList(x);
+		y = elm$core$Set$toList(y);
+	}
+	if (x.$ === 'RBNode_elm_builtin' || x.$ === 'RBEmpty_elm_builtin')
+	{
+		x = elm$core$Dict$toList(x);
+		y = elm$core$Dict$toList(y);
+	}
+	//*/
+
+	/**/
+	if (x.$ < 0)
+	{
+		x = elm$core$Dict$toList(x);
+		y = elm$core$Dict$toList(y);
+	}
+	//*/
+
+	for (var key in x)
+	{
+		if (!_Utils_eqHelp(x[key], y[key], depth + 1, stack))
+		{
+			return false;
+		}
+	}
+	return true;
+}
+
+var _Utils_equal = F2(_Utils_eq);
+var _Utils_notEqual = F2(function(a, b) { return !_Utils_eq(a,b); });
+
+
+
+// COMPARISONS
+
+// Code in Generate/JavaScript.hs, Basics.js, and List.js depends on
+// the particular integer values assigned to LT, EQ, and GT.
+
+function _Utils_cmp(x, y, ord)
+{
+	if (typeof x !== 'object')
+	{
+		return x === y ? /*EQ*/ 0 : x < y ? /*LT*/ -1 : /*GT*/ 1;
+	}
+
+	/**_UNUSED/
+	if (x instanceof String)
+	{
+		var a = x.valueOf();
+		var b = y.valueOf();
+		return a === b ? 0 : a < b ? -1 : 1;
+	}
+	//*/
+
+	/**/
+	if (!x.$)
+	//*/
+	/**_UNUSED/
+	if (x.$[0] === '#')
+	//*/
+	{
+		return (ord = _Utils_cmp(x.a, y.a))
+			? ord
+			: (ord = _Utils_cmp(x.b, y.b))
+				? ord
+				: _Utils_cmp(x.c, y.c);
+	}
+
+	// traverse conses until end of a list or a mismatch
+	for (; x.b && y.b && !(ord = _Utils_cmp(x.a, y.a)); x = x.b, y = y.b) {} // WHILE_CONSES
+	return ord || (x.b ? /*GT*/ 1 : y.b ? /*LT*/ -1 : /*EQ*/ 0);
+}
+
+var _Utils_lt = F2(function(a, b) { return _Utils_cmp(a, b) < 0; });
+var _Utils_le = F2(function(a, b) { return _Utils_cmp(a, b) < 1; });
+var _Utils_gt = F2(function(a, b) { return _Utils_cmp(a, b) > 0; });
+var _Utils_ge = F2(function(a, b) { return _Utils_cmp(a, b) >= 0; });
+
+var _Utils_compare = F2(function(x, y)
+{
+	var n = _Utils_cmp(x, y);
+	return n < 0 ? elm$core$Basics$LT : n ? elm$core$Basics$GT : elm$core$Basics$EQ;
+});
+
+
+// COMMON VALUES
+
+var _Utils_Tuple0 = 0;
+var _Utils_Tuple0_UNUSED = { $: '#0' };
+
+function _Utils_Tuple2(a, b) { return { a: a, b: b }; }
+function _Utils_Tuple2_UNUSED(a, b) { return { $: '#2', a: a, b: b }; }
+
+function _Utils_Tuple3(a, b, c) { return { a: a, b: b, c: c }; }
+function _Utils_Tuple3_UNUSED(a, b, c) { return { $: '#3', a: a, b: b, c: c }; }
+
+function _Utils_chr(c) { return c; }
+function _Utils_chr_UNUSED(c) { return new String(c); }
+
+
+// RECORDS
+
+function _Utils_update(oldRecord, updatedFields)
+{
+	var newRecord = {};
+
+	for (var key in oldRecord)
+	{
+		newRecord[key] = oldRecord[key];
+	}
+
+	for (var key in updatedFields)
+	{
+		newRecord[key] = updatedFields[key];
+	}
+
+	return newRecord;
+}
+
+
+// APPEND
+
+var _Utils_append = F2(_Utils_ap);
+
+function _Utils_ap(xs, ys)
+{
+	// append Strings
+	if (typeof xs === 'string')
+	{
+		return xs + ys;
+	}
+
+	// append Lists
+	if (!xs.b)
+	{
+		return ys;
+	}
+	var root = _List_Cons(xs.a, ys);
+	xs = xs.b
+	for (var curr = root; xs.b; xs = xs.b) // WHILE_CONS
+	{
+		curr = curr.b = _List_Cons(xs.a, ys);
+	}
+	return root;
+}
+
+
+
 var _JsArray_empty = [];
 
 function _JsArray_singleton(value)
@@ -238,87 +503,6 @@ var _JsArray_appendN = F3(function(n, dest, source)
     }
 
     return result;
-});
-
-
-
-var _List_Nil = { $: 0 };
-var _List_Nil_UNUSED = { $: '[]' };
-
-function _List_Cons(hd, tl) { return { $: 1, a: hd, b: tl }; }
-function _List_Cons_UNUSED(hd, tl) { return { $: '::', a: hd, b: tl }; }
-
-
-var _List_cons = F2(_List_Cons);
-
-function _List_fromArray(arr)
-{
-	var out = _List_Nil;
-	for (var i = arr.length; i--; )
-	{
-		out = _List_Cons(arr[i], out);
-	}
-	return out;
-}
-
-function _List_toArray(xs)
-{
-	for (var out = []; xs.b; xs = xs.b) // WHILE_CONS
-	{
-		out.push(xs.a);
-	}
-	return out;
-}
-
-var _List_map2 = F3(function(f, xs, ys)
-{
-	for (var arr = []; xs.b && ys.b; xs = xs.b, ys = ys.b) // WHILE_CONSES
-	{
-		arr.push(A2(f, xs.a, ys.a));
-	}
-	return _List_fromArray(arr);
-});
-
-var _List_map3 = F4(function(f, xs, ys, zs)
-{
-	for (var arr = []; xs.b && ys.b && zs.b; xs = xs.b, ys = ys.b, zs = zs.b) // WHILE_CONSES
-	{
-		arr.push(A3(f, xs.a, ys.a, zs.a));
-	}
-	return _List_fromArray(arr);
-});
-
-var _List_map4 = F5(function(f, ws, xs, ys, zs)
-{
-	for (var arr = []; ws.b && xs.b && ys.b && zs.b; ws = ws.b, xs = xs.b, ys = ys.b, zs = zs.b) // WHILE_CONSES
-	{
-		arr.push(A4(f, ws.a, xs.a, ys.a, zs.a));
-	}
-	return _List_fromArray(arr);
-});
-
-var _List_map5 = F6(function(f, vs, ws, xs, ys, zs)
-{
-	for (var arr = []; vs.b && ws.b && xs.b && ys.b && zs.b; vs = vs.b, ws = ws.b, xs = xs.b, ys = ys.b, zs = zs.b) // WHILE_CONSES
-	{
-		arr.push(A5(f, vs.a, ws.a, xs.a, ys.a, zs.a));
-	}
-	return _List_fromArray(arr);
-});
-
-var _List_sortBy = F2(function(f, xs)
-{
-	return _List_fromArray(_List_toArray(xs).sort(function(a, b) {
-		return _Utils_cmp(f(a), f(b));
-	}));
-});
-
-var _List_sortWith = F2(function(f, xs)
-{
-	return _List_fromArray(_List_toArray(xs).sort(function(a, b) {
-		var ord = A2(f, a, b);
-		return ord === elm$core$Basics$EQ ? 0 : ord === elm$core$Basics$LT ? -1 : 1;
-	}));
 });
 
 
@@ -596,195 +780,11 @@ function _Debug_crash_UNUSED(identifier, fact1, fact2, fact3, fact4)
 
 function _Debug_regionToString(region)
 {
-	if (region.a7.ax === region.bo.ax)
+	if (region.bd.aB === region.bu.aB)
 	{
-		return 'on line ' + region.a7.ax;
+		return 'on line ' + region.bd.aB;
 	}
-	return 'on lines ' + region.a7.ax + ' through ' + region.bo.ax;
-}
-
-
-
-// EQUALITY
-
-function _Utils_eq(x, y)
-{
-	for (
-		var pair, stack = [], isEqual = _Utils_eqHelp(x, y, 0, stack);
-		isEqual && (pair = stack.pop());
-		isEqual = _Utils_eqHelp(pair.a, pair.b, 0, stack)
-		)
-	{}
-
-	return isEqual;
-}
-
-function _Utils_eqHelp(x, y, depth, stack)
-{
-	if (depth > 100)
-	{
-		stack.push(_Utils_Tuple2(x,y));
-		return true;
-	}
-
-	if (x === y)
-	{
-		return true;
-	}
-
-	if (typeof x !== 'object' || x === null || y === null)
-	{
-		typeof x === 'function' && _Debug_crash(5);
-		return false;
-	}
-
-	/**_UNUSED/
-	if (x.$ === 'Set_elm_builtin')
-	{
-		x = elm$core$Set$toList(x);
-		y = elm$core$Set$toList(y);
-	}
-	if (x.$ === 'RBNode_elm_builtin' || x.$ === 'RBEmpty_elm_builtin')
-	{
-		x = elm$core$Dict$toList(x);
-		y = elm$core$Dict$toList(y);
-	}
-	//*/
-
-	/**/
-	if (x.$ < 0)
-	{
-		x = elm$core$Dict$toList(x);
-		y = elm$core$Dict$toList(y);
-	}
-	//*/
-
-	for (var key in x)
-	{
-		if (!_Utils_eqHelp(x[key], y[key], depth + 1, stack))
-		{
-			return false;
-		}
-	}
-	return true;
-}
-
-var _Utils_equal = F2(_Utils_eq);
-var _Utils_notEqual = F2(function(a, b) { return !_Utils_eq(a,b); });
-
-
-
-// COMPARISONS
-
-// Code in Generate/JavaScript.hs, Basics.js, and List.js depends on
-// the particular integer values assigned to LT, EQ, and GT.
-
-function _Utils_cmp(x, y, ord)
-{
-	if (typeof x !== 'object')
-	{
-		return x === y ? /*EQ*/ 0 : x < y ? /*LT*/ -1 : /*GT*/ 1;
-	}
-
-	/**_UNUSED/
-	if (x instanceof String)
-	{
-		var a = x.valueOf();
-		var b = y.valueOf();
-		return a === b ? 0 : a < b ? -1 : 1;
-	}
-	//*/
-
-	/**/
-	if (!x.$)
-	//*/
-	/**_UNUSED/
-	if (x.$[0] === '#')
-	//*/
-	{
-		return (ord = _Utils_cmp(x.a, y.a))
-			? ord
-			: (ord = _Utils_cmp(x.b, y.b))
-				? ord
-				: _Utils_cmp(x.c, y.c);
-	}
-
-	// traverse conses until end of a list or a mismatch
-	for (; x.b && y.b && !(ord = _Utils_cmp(x.a, y.a)); x = x.b, y = y.b) {} // WHILE_CONSES
-	return ord || (x.b ? /*GT*/ 1 : y.b ? /*LT*/ -1 : /*EQ*/ 0);
-}
-
-var _Utils_lt = F2(function(a, b) { return _Utils_cmp(a, b) < 0; });
-var _Utils_le = F2(function(a, b) { return _Utils_cmp(a, b) < 1; });
-var _Utils_gt = F2(function(a, b) { return _Utils_cmp(a, b) > 0; });
-var _Utils_ge = F2(function(a, b) { return _Utils_cmp(a, b) >= 0; });
-
-var _Utils_compare = F2(function(x, y)
-{
-	var n = _Utils_cmp(x, y);
-	return n < 0 ? elm$core$Basics$LT : n ? elm$core$Basics$GT : elm$core$Basics$EQ;
-});
-
-
-// COMMON VALUES
-
-var _Utils_Tuple0 = 0;
-var _Utils_Tuple0_UNUSED = { $: '#0' };
-
-function _Utils_Tuple2(a, b) { return { a: a, b: b }; }
-function _Utils_Tuple2_UNUSED(a, b) { return { $: '#2', a: a, b: b }; }
-
-function _Utils_Tuple3(a, b, c) { return { a: a, b: b, c: c }; }
-function _Utils_Tuple3_UNUSED(a, b, c) { return { $: '#3', a: a, b: b, c: c }; }
-
-function _Utils_chr(c) { return c; }
-function _Utils_chr_UNUSED(c) { return new String(c); }
-
-
-// RECORDS
-
-function _Utils_update(oldRecord, updatedFields)
-{
-	var newRecord = {};
-
-	for (var key in oldRecord)
-	{
-		newRecord[key] = oldRecord[key];
-	}
-
-	for (var key in updatedFields)
-	{
-		newRecord[key] = updatedFields[key];
-	}
-
-	return newRecord;
-}
-
-
-// APPEND
-
-var _Utils_append = F2(_Utils_ap);
-
-function _Utils_ap(xs, ys)
-{
-	// append Strings
-	if (typeof xs === 'string')
-	{
-		return xs + ys;
-	}
-
-	// append Lists
-	if (!xs.b)
-	{
-		return ys;
-	}
-	var root = _List_Cons(xs.a, ys);
-	xs = xs.b
-	for (var curr = root; xs.b; xs = xs.b) // WHILE_CONS
-	{
-		curr = curr.b = _List_Cons(xs.a, ys);
-	}
-	return root;
+	return 'on lines ' + region.bd.aB + ' through ' + region.bu.aB;
 }
 
 
@@ -846,280 +846,6 @@ function _Basics_not(bool) { return !bool; }
 var _Basics_and = F2(function(a, b) { return a && b; });
 var _Basics_or  = F2(function(a, b) { return a || b; });
 var _Basics_xor = F2(function(a, b) { return a !== b; });
-
-
-
-var _Bitwise_and = F2(function(a, b)
-{
-	return a & b;
-});
-
-var _Bitwise_or = F2(function(a, b)
-{
-	return a | b;
-});
-
-var _Bitwise_xor = F2(function(a, b)
-{
-	return a ^ b;
-});
-
-function _Bitwise_complement(a)
-{
-	return ~a;
-};
-
-var _Bitwise_shiftLeftBy = F2(function(offset, a)
-{
-	return a << offset;
-});
-
-var _Bitwise_shiftRightBy = F2(function(offset, a)
-{
-	return a >> offset;
-});
-
-var _Bitwise_shiftRightZfBy = F2(function(offset, a)
-{
-	return a >>> offset;
-});
-
-
-
-// TASKS
-
-function _Scheduler_succeed(value)
-{
-	return {
-		$: 0,
-		a: value
-	};
-}
-
-function _Scheduler_fail(error)
-{
-	return {
-		$: 1,
-		a: error
-	};
-}
-
-function _Scheduler_binding(callback)
-{
-	return {
-		$: 2,
-		b: callback,
-		c: null
-	};
-}
-
-var _Scheduler_andThen = F2(function(callback, task)
-{
-	return {
-		$: 3,
-		b: callback,
-		d: task
-	};
-});
-
-var _Scheduler_onError = F2(function(callback, task)
-{
-	return {
-		$: 4,
-		b: callback,
-		d: task
-	};
-});
-
-function _Scheduler_receive(callback)
-{
-	return {
-		$: 5,
-		b: callback
-	};
-}
-
-
-// PROCESSES
-
-var _Scheduler_guid = 0;
-
-function _Scheduler_rawSpawn(task)
-{
-	var proc = {
-		$: 0,
-		e: _Scheduler_guid++,
-		f: task,
-		g: null,
-		h: []
-	};
-
-	_Scheduler_enqueue(proc);
-
-	return proc;
-}
-
-function _Scheduler_spawn(task)
-{
-	return _Scheduler_binding(function(callback) {
-		callback(_Scheduler_succeed(_Scheduler_rawSpawn(task)));
-	});
-}
-
-function _Scheduler_rawSend(proc, msg)
-{
-	proc.h.push(msg);
-	_Scheduler_enqueue(proc);
-}
-
-var _Scheduler_send = F2(function(proc, msg)
-{
-	return _Scheduler_binding(function(callback) {
-		_Scheduler_rawSend(proc, msg);
-		callback(_Scheduler_succeed(_Utils_Tuple0));
-	});
-});
-
-function _Scheduler_kill(proc)
-{
-	return _Scheduler_binding(function(callback) {
-		var task = proc.f;
-		if (task.$ === 2 && task.c)
-		{
-			task.c();
-		}
-
-		proc.f = null;
-
-		callback(_Scheduler_succeed(_Utils_Tuple0));
-	});
-}
-
-
-/* STEP PROCESSES
-
-type alias Process =
-  { $ : tag
-  , id : unique_id
-  , root : Task
-  , stack : null | { $: SUCCEED | FAIL, a: callback, b: stack }
-  , mailbox : [msg]
-  }
-
-*/
-
-
-var _Scheduler_working = false;
-var _Scheduler_queue = [];
-
-
-function _Scheduler_enqueue(proc)
-{
-	_Scheduler_queue.push(proc);
-	if (_Scheduler_working)
-	{
-		return;
-	}
-	_Scheduler_working = true;
-	while (proc = _Scheduler_queue.shift())
-	{
-		_Scheduler_step(proc);
-	}
-	_Scheduler_working = false;
-}
-
-
-function _Scheduler_step(proc)
-{
-	while (proc.f)
-	{
-		var rootTag = proc.f.$;
-		if (rootTag === 0 || rootTag === 1)
-		{
-			while (proc.g && proc.g.$ !== rootTag)
-			{
-				proc.g = proc.g.i;
-			}
-			if (!proc.g)
-			{
-				return;
-			}
-			proc.f = proc.g.b(proc.f.a);
-			proc.g = proc.g.i;
-		}
-		else if (rootTag === 2)
-		{
-			proc.f.c = proc.f.b(function(newRoot) {
-				proc.f = newRoot;
-				_Scheduler_enqueue(proc);
-			});
-			return;
-		}
-		else if (rootTag === 5)
-		{
-			if (proc.h.length === 0)
-			{
-				return;
-			}
-			proc.f = proc.f.b(proc.h.shift());
-		}
-		else // if (rootTag === 3 || rootTag === 4)
-		{
-			proc.g = {
-				$: rootTag === 3 ? 0 : 1,
-				b: proc.f.b,
-				i: proc.g
-			};
-			proc.f = proc.f.d;
-		}
-	}
-}
-
-
-
-function _Time_now(millisToPosix)
-{
-	return _Scheduler_binding(function(callback)
-	{
-		callback(_Scheduler_succeed(millisToPosix(Date.now())));
-	});
-}
-
-var _Time_setInterval = F2(function(interval, task)
-{
-	return _Scheduler_binding(function(callback)
-	{
-		var id = setInterval(function() { _Scheduler_rawSpawn(task); }, interval);
-		return function() { clearInterval(id); };
-	});
-});
-
-function _Time_here()
-{
-	return _Scheduler_binding(function(callback)
-	{
-		callback(_Scheduler_succeed(
-			A2(elm$time$Time$customZone, -(new Date().getTimezoneOffset()), _List_Nil)
-		));
-	});
-}
-
-
-function _Time_getZoneName()
-{
-	return _Scheduler_binding(function(callback)
-	{
-		try
-		{
-			var name = elm$time$Time$Name(Intl.DateTimeFormat().resolvedOptions().timeZone);
-		}
-		catch (e)
-		{
-			var name = elm$time$Time$Offset(new Date().getTimezoneOffset());
-		}
-		callback(_Scheduler_succeed(name));
-	});
-}
 
 
 
@@ -1912,6 +1638,197 @@ var _Json_encodeNull = _Json_wrap(null);
 
 
 
+// TASKS
+
+function _Scheduler_succeed(value)
+{
+	return {
+		$: 0,
+		a: value
+	};
+}
+
+function _Scheduler_fail(error)
+{
+	return {
+		$: 1,
+		a: error
+	};
+}
+
+function _Scheduler_binding(callback)
+{
+	return {
+		$: 2,
+		b: callback,
+		c: null
+	};
+}
+
+var _Scheduler_andThen = F2(function(callback, task)
+{
+	return {
+		$: 3,
+		b: callback,
+		d: task
+	};
+});
+
+var _Scheduler_onError = F2(function(callback, task)
+{
+	return {
+		$: 4,
+		b: callback,
+		d: task
+	};
+});
+
+function _Scheduler_receive(callback)
+{
+	return {
+		$: 5,
+		b: callback
+	};
+}
+
+
+// PROCESSES
+
+var _Scheduler_guid = 0;
+
+function _Scheduler_rawSpawn(task)
+{
+	var proc = {
+		$: 0,
+		e: _Scheduler_guid++,
+		f: task,
+		g: null,
+		h: []
+	};
+
+	_Scheduler_enqueue(proc);
+
+	return proc;
+}
+
+function _Scheduler_spawn(task)
+{
+	return _Scheduler_binding(function(callback) {
+		callback(_Scheduler_succeed(_Scheduler_rawSpawn(task)));
+	});
+}
+
+function _Scheduler_rawSend(proc, msg)
+{
+	proc.h.push(msg);
+	_Scheduler_enqueue(proc);
+}
+
+var _Scheduler_send = F2(function(proc, msg)
+{
+	return _Scheduler_binding(function(callback) {
+		_Scheduler_rawSend(proc, msg);
+		callback(_Scheduler_succeed(_Utils_Tuple0));
+	});
+});
+
+function _Scheduler_kill(proc)
+{
+	return _Scheduler_binding(function(callback) {
+		var task = proc.f;
+		if (task.$ === 2 && task.c)
+		{
+			task.c();
+		}
+
+		proc.f = null;
+
+		callback(_Scheduler_succeed(_Utils_Tuple0));
+	});
+}
+
+
+/* STEP PROCESSES
+
+type alias Process =
+  { $ : tag
+  , id : unique_id
+  , root : Task
+  , stack : null | { $: SUCCEED | FAIL, a: callback, b: stack }
+  , mailbox : [msg]
+  }
+
+*/
+
+
+var _Scheduler_working = false;
+var _Scheduler_queue = [];
+
+
+function _Scheduler_enqueue(proc)
+{
+	_Scheduler_queue.push(proc);
+	if (_Scheduler_working)
+	{
+		return;
+	}
+	_Scheduler_working = true;
+	while (proc = _Scheduler_queue.shift())
+	{
+		_Scheduler_step(proc);
+	}
+	_Scheduler_working = false;
+}
+
+
+function _Scheduler_step(proc)
+{
+	while (proc.f)
+	{
+		var rootTag = proc.f.$;
+		if (rootTag === 0 || rootTag === 1)
+		{
+			while (proc.g && proc.g.$ !== rootTag)
+			{
+				proc.g = proc.g.i;
+			}
+			if (!proc.g)
+			{
+				return;
+			}
+			proc.f = proc.g.b(proc.f.a);
+			proc.g = proc.g.i;
+		}
+		else if (rootTag === 2)
+		{
+			proc.f.c = proc.f.b(function(newRoot) {
+				proc.f = newRoot;
+				_Scheduler_enqueue(proc);
+			});
+			return;
+		}
+		else if (rootTag === 5)
+		{
+			if (proc.h.length === 0)
+			{
+				return;
+			}
+			proc.f = proc.f.b(proc.h.shift());
+		}
+		else // if (rootTag === 3 || rootTag === 4)
+		{
+			proc.g = {
+				$: rootTag === 3 ? 0 : 1,
+				b: proc.f.b,
+				i: proc.g
+			};
+			proc.f = proc.f.d;
+		}
+	}
+}
+
+
+
 function _Process_sleep(time)
 {
 	return _Scheduler_binding(function(callback) {
@@ -1934,9 +1851,9 @@ var _Platform_worker = F4(function(impl, flagDecoder, debugMetadata, args)
 	return _Platform_initialize(
 		flagDecoder,
 		args,
-		impl.b8,
-		impl.cp,
-		impl.cm,
+		impl.ce,
+		impl.cu,
+		impl.cr,
 		function() { return function() {} }
 	);
 });
@@ -2391,6 +2308,89 @@ function _Platform_mergeExportsDebug(moduleName, obj, exports)
 
 
 
+var _Bitwise_and = F2(function(a, b)
+{
+	return a & b;
+});
+
+var _Bitwise_or = F2(function(a, b)
+{
+	return a | b;
+});
+
+var _Bitwise_xor = F2(function(a, b)
+{
+	return a ^ b;
+});
+
+function _Bitwise_complement(a)
+{
+	return ~a;
+};
+
+var _Bitwise_shiftLeftBy = F2(function(offset, a)
+{
+	return a << offset;
+});
+
+var _Bitwise_shiftRightBy = F2(function(offset, a)
+{
+	return a >> offset;
+});
+
+var _Bitwise_shiftRightZfBy = F2(function(offset, a)
+{
+	return a >>> offset;
+});
+
+
+
+function _Time_now(millisToPosix)
+{
+	return _Scheduler_binding(function(callback)
+	{
+		callback(_Scheduler_succeed(millisToPosix(Date.now())));
+	});
+}
+
+var _Time_setInterval = F2(function(interval, task)
+{
+	return _Scheduler_binding(function(callback)
+	{
+		var id = setInterval(function() { _Scheduler_rawSpawn(task); }, interval);
+		return function() { clearInterval(id); };
+	});
+});
+
+function _Time_here()
+{
+	return _Scheduler_binding(function(callback)
+	{
+		callback(_Scheduler_succeed(
+			A2(elm$time$Time$customZone, -(new Date().getTimezoneOffset()), _List_Nil)
+		));
+	});
+}
+
+
+function _Time_getZoneName()
+{
+	return _Scheduler_binding(function(callback)
+	{
+		try
+		{
+			var name = elm$time$Time$Name(Intl.DateTimeFormat().resolvedOptions().timeZone);
+		}
+		catch (e)
+		{
+			var name = elm$time$Time$Offset(new Date().getTimezoneOffset());
+		}
+		callback(_Scheduler_succeed(name));
+	});
+}
+
+
+
 
 // HELPERS
 
@@ -2736,9 +2736,9 @@ var _VirtualDom_mapEventTuple = F2(function(func, tuple)
 var _VirtualDom_mapEventRecord = F2(function(func, record)
 {
 	return {
-		C: func(record.C),
-		a8: record.a8,
-		a6: record.a6
+		D: func(record.D),
+		be: record.be,
+		bc: record.bc
 	}
 });
 
@@ -3006,11 +3006,11 @@ function _VirtualDom_makeCallback(eventNode, initialHandler)
 		// 3 = Custom
 
 		var value = result.a;
-		var message = !tag ? value : tag < 3 ? value.a : value.C;
-		var stopPropagation = tag == 1 ? value.b : tag == 3 && value.a8;
+		var message = !tag ? value : tag < 3 ? value.a : value.D;
+		var stopPropagation = tag == 1 ? value.b : tag == 3 && value.be;
 		var currentEventNode = (
 			stopPropagation && event.stopPropagation(),
-			(tag == 2 ? value.b : tag == 3 && value.a6) && event.preventDefault(),
+			(tag == 2 ? value.b : tag == 3 && value.bc) && event.preventDefault(),
 			eventNode
 		);
 		var tagger;
@@ -3960,11 +3960,11 @@ var _Browser_element = _Debugger_element || F4(function(impl, flagDecoder, debug
 	return _Platform_initialize(
 		flagDecoder,
 		args,
-		impl.b8,
-		impl.cp,
-		impl.cm,
+		impl.ce,
+		impl.cu,
+		impl.cr,
 		function(sendToApp, initialModel) {
-			var view = impl.ct;
+			var view = impl.cy;
 			/**/
 			var domNode = args['node'];
 			//*/
@@ -3996,12 +3996,12 @@ var _Browser_document = _Debugger_document || F4(function(impl, flagDecoder, deb
 	return _Platform_initialize(
 		flagDecoder,
 		args,
-		impl.b8,
-		impl.cp,
-		impl.cm,
+		impl.ce,
+		impl.cu,
+		impl.cr,
 		function(sendToApp, initialModel) {
-			var divertHrefToApp = impl.aB && impl.aB(sendToApp)
-			var view = impl.ct;
+			var divertHrefToApp = impl.aF && impl.aF(sendToApp)
+			var view = impl.cy;
 			var title = _VirtualDom_doc.title;
 			var bodyNode = _VirtualDom_doc.body;
 			var currNode = _VirtualDom_virtualize(bodyNode);
@@ -4009,12 +4009,12 @@ var _Browser_document = _Debugger_document || F4(function(impl, flagDecoder, deb
 			{
 				_VirtualDom_divertHrefToApp = divertHrefToApp;
 				var doc = view(model);
-				var nextNode = _VirtualDom_node('body')(_List_Nil)(doc.bX);
+				var nextNode = _VirtualDom_node('body')(_List_Nil)(doc.b1);
 				var patches = _VirtualDom_diff(currNode, nextNode);
 				bodyNode = _VirtualDom_applyPatches(bodyNode, currNode, patches, sendToApp);
 				currNode = nextNode;
 				_VirtualDom_divertHrefToApp = 0;
-				(title !== doc.co) && (_VirtualDom_doc.title = title = doc.co);
+				(title !== doc.ct) && (_VirtualDom_doc.title = title = doc.ct);
 			});
 		}
 	);
@@ -4070,12 +4070,12 @@ function _Browser_makeAnimator(model, draw)
 
 function _Browser_application(impl)
 {
-	var onUrlChange = impl.cf;
-	var onUrlRequest = impl.cg;
+	var onUrlChange = impl.ck;
+	var onUrlRequest = impl.cl;
 	var key = function() { key.a(onUrlChange(_Browser_getUrl())); };
 
 	return _Browser_document({
-		aB: function(sendToApp)
+		aF: function(sendToApp)
 		{
 			key.a = sendToApp;
 			_Browser_window.addEventListener('popstate', key);
@@ -4091,9 +4091,9 @@ function _Browser_application(impl)
 					var next = elm$url$Url$fromString(href).a;
 					sendToApp(onUrlRequest(
 						(next
-							&& curr.bG === next.bG
-							&& curr.bs === next.bs
-							&& curr.bD.a === next.bD.a
+							&& curr.bM === next.bM
+							&& curr.by === next.by
+							&& curr.bJ.a === next.bJ.a
 						)
 							? elm$browser$Browser$Internal(next)
 							: elm$browser$Browser$External(href)
@@ -4101,13 +4101,13 @@ function _Browser_application(impl)
 				}
 			});
 		},
-		b8: function(flags)
+		ce: function(flags)
 		{
-			return A3(impl.b8, flags, _Browser_getUrl(), key);
+			return A3(impl.ce, flags, _Browser_getUrl(), key);
 		},
-		ct: impl.ct,
-		cp: impl.cp,
-		cm: impl.cm
+		cy: impl.cy,
+		cu: impl.cu,
+		cr: impl.cr
 	});
 }
 
@@ -4173,17 +4173,17 @@ var _Browser_decodeEvent = F2(function(decoder, event)
 function _Browser_visibilityInfo()
 {
 	return (typeof _VirtualDom_doc.hidden !== 'undefined')
-		? { b5: 'hidden', bZ: 'visibilitychange' }
+		? { cb: 'hidden', b3: 'visibilitychange' }
 		:
 	(typeof _VirtualDom_doc.mozHidden !== 'undefined')
-		? { b5: 'mozHidden', bZ: 'mozvisibilitychange' }
+		? { cb: 'mozHidden', b3: 'mozvisibilitychange' }
 		:
 	(typeof _VirtualDom_doc.msHidden !== 'undefined')
-		? { b5: 'msHidden', bZ: 'msvisibilitychange' }
+		? { cb: 'msHidden', b3: 'msvisibilitychange' }
 		:
 	(typeof _VirtualDom_doc.webkitHidden !== 'undefined')
-		? { b5: 'webkitHidden', bZ: 'webkitvisibilitychange' }
-		: { b5: 'hidden', bZ: 'visibilitychange' };
+		? { cb: 'webkitHidden', b3: 'webkitvisibilitychange' }
+		: { cb: 'hidden', b3: 'visibilitychange' };
 }
 
 
@@ -4264,12 +4264,12 @@ var _Browser_call = F2(function(functionName, id)
 function _Browser_getViewport()
 {
 	return {
-		bL: _Browser_getScene(),
-		bS: {
-			aX: _Browser_window.pageXOffset,
-			aY: _Browser_window.pageYOffset,
-			an: _Browser_doc.documentElement.clientWidth,
-			_: _Browser_doc.documentElement.clientHeight
+		bR: _Browser_getScene(),
+		bY: {
+			a0: _Browser_window.pageXOffset,
+			a1: _Browser_window.pageYOffset,
+			ao: _Browser_doc.documentElement.clientWidth,
+			aa: _Browser_doc.documentElement.clientHeight
 		}
 	};
 }
@@ -4279,8 +4279,8 @@ function _Browser_getScene()
 	var body = _Browser_doc.body;
 	var elem = _Browser_doc.documentElement;
 	return {
-		an: Math.max(body.scrollWidth, body.offsetWidth, elem.scrollWidth, elem.offsetWidth, elem.clientWidth),
-		_: Math.max(body.scrollHeight, body.offsetHeight, elem.scrollHeight, elem.offsetHeight, elem.clientHeight)
+		ao: Math.max(body.scrollWidth, body.offsetWidth, elem.scrollWidth, elem.offsetWidth, elem.clientWidth),
+		aa: Math.max(body.scrollHeight, body.offsetHeight, elem.scrollHeight, elem.offsetHeight, elem.clientHeight)
 	};
 }
 
@@ -4303,15 +4303,15 @@ function _Browser_getViewportOf(id)
 	return _Browser_withNode(id, function(node)
 	{
 		return {
-			bL: {
-				an: node.scrollWidth,
-				_: node.scrollHeight
+			bR: {
+				ao: node.scrollWidth,
+				aa: node.scrollHeight
 			},
-			bS: {
-				aX: node.scrollLeft,
-				aY: node.scrollTop,
-				an: node.clientWidth,
-				_: node.clientHeight
+			bY: {
+				a0: node.scrollLeft,
+				a1: node.scrollTop,
+				ao: node.clientWidth,
+				aa: node.clientHeight
 			}
 		};
 	});
@@ -4341,18 +4341,18 @@ function _Browser_getElement(id)
 		var x = _Browser_window.pageXOffset;
 		var y = _Browser_window.pageYOffset;
 		return {
-			bL: _Browser_getScene(),
-			bS: {
-				aX: x,
-				aY: y,
-				an: _Browser_doc.documentElement.clientWidth,
-				_: _Browser_doc.documentElement.clientHeight
+			bR: _Browser_getScene(),
+			bY: {
+				a0: x,
+				a1: y,
+				ao: _Browser_doc.documentElement.clientWidth,
+				aa: _Browser_doc.documentElement.clientHeight
 			},
-			b2: {
-				aX: x + rect.left,
-				aY: y + rect.top,
-				an: rect.width,
-				_: rect.height
+			b8: {
+				a0: x + rect.left,
+				a1: y + rect.top,
+				ao: rect.width,
+				aa: rect.height
 			}
 		};
 	});
@@ -4388,8 +4388,6 @@ function _Browser_load(url)
 	}));
 }
 var author$project$Examples$Basic$TypewriterMsg = elm$core$Basics$identity;
-var author$project$Typewriter$Infinite = {$: 0};
-var author$project$Typewriter$infinite = author$project$Typewriter$Infinite;
 var author$project$Typewriter$Model = elm$core$Basics$identity;
 var author$project$Typewriter$Typing = function (a) {
 	return {$: 0, a: a};
@@ -4402,34 +4400,9 @@ var elm$core$Basics$apR = F2(
 	function (x, f) {
 		return f(x);
 	});
-var elm$core$Elm$JsArray$foldr = _JsArray_foldr;
-var elm$core$Array$foldr = F3(
-	function (func, baseCase, _n0) {
-		var tree = _n0.c;
-		var tail = _n0.d;
-		var helper = F2(
-			function (node, acc) {
-				if (!node.$) {
-					var subTree = node.a;
-					return A3(elm$core$Elm$JsArray$foldr, helper, acc, subTree);
-				} else {
-					var values = node.a;
-					return A3(elm$core$Elm$JsArray$foldr, func, acc, values);
-				}
-			});
-		return A3(
-			elm$core$Elm$JsArray$foldr,
-			helper,
-			A3(elm$core$Elm$JsArray$foldr, func, baseCase, tail),
-			tree);
-	});
 var elm$core$Basics$EQ = 1;
-var elm$core$Basics$LT = 0;
-var elm$core$List$cons = _List_cons;
-var elm$core$Array$toList = function (array) {
-	return A3(elm$core$Array$foldr, elm$core$List$cons, _List_Nil, array);
-};
 var elm$core$Basics$GT = 2;
+var elm$core$Basics$LT = 0;
 var elm$core$Dict$foldr = F3(
 	function (func, acc, t) {
 		foldr:
@@ -4455,6 +4428,7 @@ var elm$core$Dict$foldr = F3(
 			}
 		}
 	});
+var elm$core$List$cons = _List_cons;
 var elm$core$Dict$toList = function (dict) {
 	return A3(
 		elm$core$Dict$foldr,
@@ -4482,93 +4456,32 @@ var elm$core$Set$toList = function (_n0) {
 	var dict = _n0;
 	return elm$core$Dict$keys(dict);
 };
-var elm$core$Basics$lt = _Utils_lt;
-var elm$core$Basics$negate = function (n) {
-	return -n;
-};
-var elm$core$Basics$abs = function (n) {
-	return (n < 0) ? (-n) : n;
-};
-var elm$core$Basics$add = _Basics_add;
-var elm$core$Basics$fdiv = _Basics_fdiv;
-var elm$core$Basics$identity = function (x) {
-	return x;
+var elm$core$Elm$JsArray$foldr = _JsArray_foldr;
+var elm$core$Array$foldr = F3(
+	function (func, baseCase, _n0) {
+		var tree = _n0.c;
+		var tail = _n0.d;
+		var helper = F2(
+			function (node, acc) {
+				if (!node.$) {
+					var subTree = node.a;
+					return A3(elm$core$Elm$JsArray$foldr, helper, acc, subTree);
+				} else {
+					var values = node.a;
+					return A3(elm$core$Elm$JsArray$foldr, func, acc, values);
+				}
+			});
+		return A3(
+			elm$core$Elm$JsArray$foldr,
+			helper,
+			A3(elm$core$Elm$JsArray$foldr, func, baseCase, tail),
+			tree);
+	});
+var elm$core$Array$toList = function (array) {
+	return A3(elm$core$Array$foldr, elm$core$List$cons, _List_Nil, array);
 };
 var elm$core$Basics$mul = _Basics_mul;
-var elm$core$Basics$sub = _Basics_sub;
 var elm$core$Basics$toFloat = _Basics_toFloat;
-var elm$core$Bitwise$and = _Bitwise_and;
-var elm$random$Random$Generator = elm$core$Basics$identity;
-var elm$core$Bitwise$shiftRightZfBy = _Bitwise_shiftRightZfBy;
-var elm$random$Random$Seed = F2(
-	function (a, b) {
-		return {$: 0, a: a, b: b};
-	});
-var elm$random$Random$next = function (_n0) {
-	var state0 = _n0.a;
-	var incr = _n0.b;
-	return A2(elm$random$Random$Seed, ((state0 * 1664525) + incr) >>> 0, incr);
-};
-var elm$core$Bitwise$xor = _Bitwise_xor;
-var elm$random$Random$peel = function (_n0) {
-	var state = _n0.a;
-	var word = (state ^ (state >>> ((state >>> 28) + 4))) * 277803737;
-	return ((word >>> 22) ^ word) >>> 0;
-};
-var elm$random$Random$float = F2(
-	function (a, b) {
-		return function (seed0) {
-			var seed1 = elm$random$Random$next(seed0);
-			var range = elm$core$Basics$abs(b - a);
-			var n1 = elm$random$Random$peel(seed1);
-			var n0 = elm$random$Random$peel(seed0);
-			var lo = (134217727 & n1) * 1.0;
-			var hi = (67108863 & n0) * 1.0;
-			var val = ((hi * 1.34217728e8) + lo) / 9.007199254740992e15;
-			var scaled = (val * range) + a;
-			return _Utils_Tuple2(
-				scaled,
-				elm$random$Random$next(seed1));
-		};
-	});
-var elm$random$Random$Generate = elm$core$Basics$identity;
-var elm$core$Task$andThen = _Scheduler_andThen;
-var elm$core$Task$succeed = _Scheduler_succeed;
-var elm$random$Random$initialSeed = function (x) {
-	var _n0 = elm$random$Random$next(
-		A2(elm$random$Random$Seed, 0, 1013904223));
-	var state1 = _n0.a;
-	var incr = _n0.b;
-	var state2 = (state1 + x) >>> 0;
-	return elm$random$Random$next(
-		A2(elm$random$Random$Seed, state2, incr));
-};
-var elm$time$Time$Name = function (a) {
-	return {$: 0, a: a};
-};
-var elm$time$Time$Offset = function (a) {
-	return {$: 1, a: a};
-};
-var elm$time$Time$Zone = F2(
-	function (a, b) {
-		return {$: 0, a: a, b: b};
-	});
-var elm$time$Time$customZone = elm$time$Time$Zone;
-var elm$time$Time$Posix = elm$core$Basics$identity;
-var elm$time$Time$millisToPosix = elm$core$Basics$identity;
-var elm$time$Time$now = _Time_now(elm$time$Time$millisToPosix);
-var elm$time$Time$posixToMillis = function (_n0) {
-	var millis = _n0;
-	return millis;
-};
-var elm$random$Random$init = A2(
-	elm$core$Task$andThen,
-	function (time) {
-		return elm$core$Task$succeed(
-			elm$random$Random$initialSeed(
-				elm$time$Time$posixToMillis(time)));
-	},
-	elm$time$Time$now);
 var elm$core$Basics$False = 1;
 var elm$core$Basics$True = 0;
 var elm$core$Result$isOk = function (result) {
@@ -4584,6 +4497,7 @@ var elm$core$Array$Array_elm_builtin = F4(
 		return {$: 0, a: a, b: b, c: c, d: d};
 	});
 var elm$core$Basics$ceiling = _Basics_ceiling;
+var elm$core$Basics$fdiv = _Basics_fdiv;
 var elm$core$Basics$logBase = F2(
 	function (base, number) {
 		return _Basics_log(number) / _Basics_log(base);
@@ -4664,6 +4578,7 @@ var elm$core$Array$treeFromBuilder = F2(
 			}
 		}
 	});
+var elm$core$Basics$add = _Basics_add;
 var elm$core$Basics$apL = F2(
 	function (f, x) {
 		return f(x);
@@ -4674,6 +4589,7 @@ var elm$core$Basics$max = F2(
 	function (x, y) {
 		return (_Utils_cmp(x, y) > 0) ? x : y;
 	});
+var elm$core$Basics$sub = _Basics_sub;
 var elm$core$Elm$JsArray$length = _JsArray_length;
 var elm$core$Array$builderToArray = F2(
 	function (reverseNodeList, builder) {
@@ -4699,6 +4615,7 @@ var elm$core$Array$builderToArray = F2(
 		}
 	});
 var elm$core$Basics$idiv = _Basics_idiv;
+var elm$core$Basics$lt = _Utils_lt;
 var elm$core$Elm$JsArray$initialize = _JsArray_initialize;
 var elm$core$Array$initializeHelp = F5(
 	function (fn, fromIndex, len, nodeList, tail) {
@@ -4954,66 +4871,14 @@ var elm$json$Json$Decode$errorToStringHelp = F2(
 			}
 		}
 	});
-var elm$core$Platform$sendToApp = _Platform_sendToApp;
-var elm$random$Random$step = F2(
-	function (_n0, seed) {
-		var generator = _n0;
-		return generator(seed);
-	});
-var elm$random$Random$onEffects = F3(
-	function (router, commands, seed) {
-		if (!commands.b) {
-			return elm$core$Task$succeed(seed);
-		} else {
-			var generator = commands.a;
-			var rest = commands.b;
-			var _n1 = A2(elm$random$Random$step, generator, seed);
-			var value = _n1.a;
-			var newSeed = _n1.b;
-			return A2(
-				elm$core$Task$andThen,
-				function (_n2) {
-					return A3(elm$random$Random$onEffects, router, rest, newSeed);
-				},
-				A2(elm$core$Platform$sendToApp, router, value));
-		}
-	});
-var elm$random$Random$onSelfMsg = F3(
-	function (_n0, _n1, seed) {
-		return elm$core$Task$succeed(seed);
-	});
-var elm$random$Random$map = F2(
-	function (func, _n0) {
-		var genA = _n0;
-		return function (seed0) {
-			var _n1 = genA(seed0);
-			var a = _n1.a;
-			var seed1 = _n1.b;
-			return _Utils_Tuple2(
-				func(a),
-				seed1);
-		};
-	});
-var elm$random$Random$cmdMap = F2(
-	function (func, _n0) {
-		var generator = _n0;
-		return A2(elm$random$Random$map, func, generator);
-	});
-_Platform_effectManagers['Random'] = _Platform_createManager(elm$random$Random$init, elm$random$Random$onEffects, elm$random$Random$onSelfMsg, elm$random$Random$cmdMap);
-var elm$random$Random$command = _Platform_leaf('Random');
-var elm$random$Random$generate = F2(
-	function (tagger, generator) {
-		return elm$random$Random$command(
-			A2(elm$random$Random$map, tagger, generator));
-	});
-var author$project$Typewriter$randomCoeff = A2(
-	elm$random$Random$generate,
-	author$project$Typewriter$UpdateCoeff,
-	A2(elm$random$Random$float, 0.8, 1.2));
 var elm$core$Platform$Cmd$batch = _Platform_batch;
 var elm$core$Platform$Cmd$none = elm$core$Platform$Cmd$batch(_List_Nil);
 var elm$core$Process$sleep = _Process_sleep;
+var elm$core$Basics$identity = function (x) {
+	return x;
+};
 var elm$core$Task$Perform = elm$core$Basics$identity;
+var elm$core$Task$succeed = _Scheduler_succeed;
 var elm$core$Task$init = elm$core$Task$succeed(0);
 var elm$core$List$foldrHelper = F4(
 	function (fn, acc, ctr, ls) {
@@ -5084,6 +4949,7 @@ var elm$core$List$map = F2(
 			_List_Nil,
 			xs);
 	});
+var elm$core$Task$andThen = _Scheduler_andThen;
 var elm$core$Task$map = F2(
 	function (func, taskA) {
 		return A2(
@@ -5116,6 +4982,7 @@ var elm$core$Task$sequence = function (tasks) {
 		elm$core$Task$succeed(_List_Nil),
 		tasks);
 };
+var elm$core$Platform$sendToApp = _Platform_sendToApp;
 var elm$core$Task$spawnCmd = F2(
 	function (router, _n0) {
 		var task = _n0;
@@ -5154,14 +5021,116 @@ var elm$core$Task$perform = F2(
 		return elm$core$Task$command(
 			A2(elm$core$Task$map, toMessage, task));
 	});
+var elm$random$Random$Generate = elm$core$Basics$identity;
+var elm$core$Bitwise$shiftRightZfBy = _Bitwise_shiftRightZfBy;
+var elm$random$Random$Seed = F2(
+	function (a, b) {
+		return {$: 0, a: a, b: b};
+	});
+var elm$random$Random$next = function (_n0) {
+	var state0 = _n0.a;
+	var incr = _n0.b;
+	return A2(elm$random$Random$Seed, ((state0 * 1664525) + incr) >>> 0, incr);
+};
+var elm$random$Random$initialSeed = function (x) {
+	var _n0 = elm$random$Random$next(
+		A2(elm$random$Random$Seed, 0, 1013904223));
+	var state1 = _n0.a;
+	var incr = _n0.b;
+	var state2 = (state1 + x) >>> 0;
+	return elm$random$Random$next(
+		A2(elm$random$Random$Seed, state2, incr));
+};
+var elm$time$Time$Name = function (a) {
+	return {$: 0, a: a};
+};
+var elm$time$Time$Offset = function (a) {
+	return {$: 1, a: a};
+};
+var elm$time$Time$Zone = F2(
+	function (a, b) {
+		return {$: 0, a: a, b: b};
+	});
+var elm$time$Time$customZone = elm$time$Time$Zone;
+var elm$time$Time$Posix = elm$core$Basics$identity;
+var elm$time$Time$millisToPosix = elm$core$Basics$identity;
+var elm$time$Time$now = _Time_now(elm$time$Time$millisToPosix);
+var elm$time$Time$posixToMillis = function (_n0) {
+	var millis = _n0;
+	return millis;
+};
+var elm$random$Random$init = A2(
+	elm$core$Task$andThen,
+	function (time) {
+		return elm$core$Task$succeed(
+			elm$random$Random$initialSeed(
+				elm$time$Time$posixToMillis(time)));
+	},
+	elm$time$Time$now);
+var elm$random$Random$step = F2(
+	function (_n0, seed) {
+		var generator = _n0;
+		return generator(seed);
+	});
+var elm$random$Random$onEffects = F3(
+	function (router, commands, seed) {
+		if (!commands.b) {
+			return elm$core$Task$succeed(seed);
+		} else {
+			var generator = commands.a;
+			var rest = commands.b;
+			var _n1 = A2(elm$random$Random$step, generator, seed);
+			var value = _n1.a;
+			var newSeed = _n1.b;
+			return A2(
+				elm$core$Task$andThen,
+				function (_n2) {
+					return A3(elm$random$Random$onEffects, router, rest, newSeed);
+				},
+				A2(elm$core$Platform$sendToApp, router, value));
+		}
+	});
+var elm$random$Random$onSelfMsg = F3(
+	function (_n0, _n1, seed) {
+		return elm$core$Task$succeed(seed);
+	});
+var elm$random$Random$Generator = elm$core$Basics$identity;
+var elm$random$Random$map = F2(
+	function (func, _n0) {
+		var genA = _n0;
+		return function (seed0) {
+			var _n1 = genA(seed0);
+			var a = _n1.a;
+			var seed1 = _n1.b;
+			return _Utils_Tuple2(
+				func(a),
+				seed1);
+		};
+	});
+var elm$random$Random$cmdMap = F2(
+	function (func, _n0) {
+		var generator = _n0;
+		return A2(elm$random$Random$map, func, generator);
+	});
+_Platform_effectManagers['Random'] = _Platform_createManager(elm$random$Random$init, elm$random$Random$onEffects, elm$random$Random$onSelfMsg, elm$random$Random$cmdMap);
+var elm$random$Random$command = _Platform_leaf('Random');
+var elm$random$Random$generate = F2(
+	function (tagger, generator) {
+		return elm$random$Random$command(
+			A2(elm$random$Random$map, tagger, generator));
+	});
 var author$project$Typewriter$schedule = function (_n0) {
 	var mode = _n0.g;
-	var delayCoeff = _n0.a_;
+	var config = _n0.a3;
+	var delayCoeff = _n0.a4;
 	var stepAfter = function (interval) {
 		return function (cmd) {
 			return elm$core$Platform$Cmd$batch(
 				_List_fromArray(
-					[cmd, author$project$Typewriter$randomCoeff]));
+					[
+						cmd,
+						A2(elm$random$Random$generate, author$project$Typewriter$UpdateCoeff, config.az)
+					]));
 		}(
 			A2(
 				elm$core$Task$perform,
@@ -5172,11 +5141,11 @@ var author$project$Typewriter$schedule = function (_n0) {
 	};
 	switch (mode.$) {
 		case 0:
-			return stepAfter(100);
+			return stepAfter(config.a$);
 		case 1:
 			return stepAfter(300);
 		case 2:
-			return stepAfter(50);
+			return stepAfter(config.aO);
 		case 3:
 			return stepAfter(500);
 		case 4:
@@ -5215,20 +5184,62 @@ var wernerdegroot$listzipper$List$Zipper$withDefault = function (x) {
 	return elm$core$Maybe$withDefault(
 		wernerdegroot$listzipper$List$Zipper$singleton(x));
 };
-var author$project$Typewriter$init = function (config) {
+var author$project$Typewriter$init = function (_n0) {
+	var config = _n0;
 	var model = {
-		at: config.b9,
-		a_: 1,
-		b9: config.b9,
+		a3: config,
+		au: config.ay,
+		a4: 1,
 		g: author$project$Typewriter$Typing(0),
-		cu: A2(
+		l: A2(
 			wernerdegroot$listzipper$List$Zipper$withDefault,
 			'',
-			wernerdegroot$listzipper$List$Zipper$fromList(config.cu))
+			wernerdegroot$listzipper$List$Zipper$fromList(config.l))
 	};
 	return _Utils_Tuple2(
 		model,
 		author$project$Typewriter$schedule(model));
+};
+var author$project$Typewriter$Config = elm$core$Basics$identity;
+var author$project$Typewriter$Infinite = {$: 0};
+var author$project$Typewriter$infinite = author$project$Typewriter$Infinite;
+var elm$core$Basics$negate = function (n) {
+	return -n;
+};
+var elm$core$Basics$abs = function (n) {
+	return (n < 0) ? (-n) : n;
+};
+var elm$core$Bitwise$and = _Bitwise_and;
+var elm$core$Bitwise$xor = _Bitwise_xor;
+var elm$random$Random$peel = function (_n0) {
+	var state = _n0.a;
+	var word = (state ^ (state >>> ((state >>> 28) + 4))) * 277803737;
+	return ((word >>> 22) ^ word) >>> 0;
+};
+var elm$random$Random$float = F2(
+	function (a, b) {
+		return function (seed0) {
+			var seed1 = elm$random$Random$next(seed0);
+			var range = elm$core$Basics$abs(b - a);
+			var n1 = elm$random$Random$peel(seed1);
+			var n0 = elm$random$Random$peel(seed0);
+			var lo = (134217727 & n1) * 1.0;
+			var hi = (67108863 & n0) * 1.0;
+			var val = ((hi * 1.34217728e8) + lo) / 9.007199254740992e15;
+			var scaled = (val * range) + a;
+			return _Utils_Tuple2(
+				scaled,
+				elm$random$Random$next(seed1));
+		};
+	});
+var author$project$Typewriter$withWords = function (words) {
+	return {
+		aO: 50,
+		ay: author$project$Typewriter$infinite,
+		az: A2(elm$random$Random$float, 0.8, 1.2),
+		a$: 100,
+		l: words
+	};
 };
 var elm$core$Platform$Cmd$map = _Platform_map;
 var elm$core$Tuple$mapSecond = F2(
@@ -5243,13 +5254,138 @@ var author$project$Examples$Basic$init = A2(
 	elm$core$Tuple$mapSecond,
 	elm$core$Platform$Cmd$map(elm$core$Basics$identity),
 	author$project$Typewriter$init(
-		{
-			b9: author$project$Typewriter$infinite,
-			cu: _List_fromArray(
-				['one', 'two', 'three'])
-		}));
+		author$project$Typewriter$withWords(
+			_List_fromArray(
+				['one', 'two', 'three']))));
+var author$project$Examples$Delay$TypewriterMsg = elm$core$Basics$identity;
+var author$project$Typewriter$withBackspaceDelay = F2(
+	function (delay, _n0) {
+		var config = _n0;
+		return _Utils_update(
+			config,
+			{aO: delay});
+	});
+var author$project$Typewriter$withTypeDelay = F2(
+	function (delay, _n0) {
+		var config = _n0;
+		return _Utils_update(
+			config,
+			{a$: delay});
+	});
+var author$project$Examples$Delay$init = A2(
+	elm$core$Tuple$mapSecond,
+	elm$core$Platform$Cmd$map(elm$core$Basics$identity),
+	author$project$Typewriter$init(
+		A2(
+			author$project$Typewriter$withBackspaceDelay,
+			10,
+			A2(
+				author$project$Typewriter$withTypeDelay,
+				600,
+				author$project$Typewriter$withWords(
+					_List_fromArray(
+						['Supercalifragilisticexpialidocious']))))));
+var author$project$Examples$Jitter$TypewriterMsg = elm$core$Basics$identity;
+var author$project$Typewriter$withJitter = F2(
+	function (jitter, _n0) {
+		var config = _n0;
+		return _Utils_update(
+			config,
+			{az: jitter});
+	});
+var elm$random$Random$constant = function (value) {
+	return function (seed) {
+		return _Utils_Tuple2(value, seed);
+	};
+};
+var elm$core$Basics$composeL = F3(
+	function (g, f, x) {
+		return g(
+			f(x));
+	});
+var elm$core$List$sum = function (numbers) {
+	return A3(elm$core$List$foldl, elm$core$Basics$add, 0, numbers);
+};
+var elm$core$Tuple$second = function (_n0) {
+	var y = _n0.b;
+	return y;
+};
+var elm$random$Random$andThen = F2(
+	function (callback, _n0) {
+		var genA = _n0;
+		return function (seed) {
+			var _n1 = genA(seed);
+			var result = _n1.a;
+			var newSeed = _n1.b;
+			var _n2 = callback(result);
+			var genB = _n2;
+			return genB(newSeed);
+		};
+	});
+var elm_community$random_extra$Random$Extra$frequency = F2(
+	function (head, pairs) {
+		var total = elm$core$List$sum(
+			A2(
+				elm$core$List$map,
+				A2(elm$core$Basics$composeL, elm$core$Basics$abs, elm$core$Tuple$first),
+				A2(elm$core$List$cons, head, pairs)));
+		var pick = F2(
+			function (someChoices, n) {
+				pick:
+				while (true) {
+					if (someChoices.b) {
+						var _n1 = someChoices.a;
+						var k = _n1.a;
+						var g = _n1.b;
+						var rest = someChoices.b;
+						if (_Utils_cmp(n, k) < 1) {
+							return g;
+						} else {
+							var $temp$someChoices = rest,
+								$temp$n = n - k;
+							someChoices = $temp$someChoices;
+							n = $temp$n;
+							continue pick;
+						}
+					} else {
+						return head.b;
+					}
+				}
+			});
+		return A2(
+			elm$random$Random$andThen,
+			pick(
+				A2(elm$core$List$cons, head, pairs)),
+			A2(elm$random$Random$float, 0, total));
+	});
+var author$project$Examples$Jitter$init = A2(
+	elm$core$Tuple$mapSecond,
+	elm$core$Platform$Cmd$map(elm$core$Basics$identity),
+	author$project$Typewriter$init(
+		A2(
+			author$project$Typewriter$withJitter,
+			A2(
+				elm_community$random_extra$Random$Extra$frequency,
+				_Utils_Tuple2(
+					10,
+					elm$random$Random$constant(1)),
+				_List_fromArray(
+					[
+						_Utils_Tuple2(
+						1,
+						elm$random$Random$constant(15))
+					])),
+			author$project$Typewriter$withWords(
+				_List_fromArray(
+					['Maybe I drank too much soda this morning...'])))));
 var author$project$Examples$Main$BasicMsg = function (a) {
 	return {$: 1, a: a};
+};
+var author$project$Examples$Main$DelayMsg = function (a) {
+	return {$: 3, a: a};
+};
+var author$project$Examples$Main$JitterMsg = function (a) {
+	return {$: 4, a: a};
 };
 var author$project$Examples$Main$TimesMsg = function (a) {
 	return {$: 2, a: a};
@@ -5260,50 +5396,59 @@ var author$project$Examples$Main$TitleMsg = function (a) {
 var author$project$Examples$Times$TypewriterMsg = function (a) {
 	return {$: 0, a: a};
 };
+var author$project$Typewriter$iterations = F2(
+	function (value, _n0) {
+		var config = _n0;
+		return _Utils_update(
+			config,
+			{ay: value});
+	});
 var author$project$Typewriter$Times = function (a) {
 	return {$: 1, a: a};
 };
-var elm$core$Basics$composeL = F3(
-	function (g, f, x) {
-		return g(
-			f(x));
-	});
 var author$project$Typewriter$times = A2(
 	elm$core$Basics$composeL,
 	author$project$Typewriter$Times,
-	elm$core$Basics$max(1));
+	elm$core$Basics$max(0));
 var author$project$Examples$Times$init = A2(
 	elm$core$Tuple$mapSecond,
 	elm$core$Platform$Cmd$map(author$project$Examples$Times$TypewriterMsg),
 	author$project$Typewriter$init(
-		{
-			b9: author$project$Typewriter$times(2),
-			cu: _List_fromArray(
-				['First Phrase', 'Last Phrase'])
-		}));
+		A2(
+			author$project$Typewriter$iterations,
+			author$project$Typewriter$times(2),
+			author$project$Typewriter$withWords(
+				_List_fromArray(
+					['First Phrase', 'Last Phrase'])))));
 var author$project$Examples$Main$init = function () {
 	var _n0 = author$project$Typewriter$init(
-		{
-			b9: author$project$Typewriter$infinite,
-			cu: _List_fromArray(
-				['A Small Library!', 'Written In Elm!', 'Not Another JS Framework.', 'Not Made With Love.'])
-		});
+		author$project$Typewriter$withWords(
+			_List_fromArray(
+				['A Small Library!', 'Written In Elm!', 'Not Another JS Framework', 'Not Made With Love'])));
 	var title = _n0.a;
 	var titleCmd = _n0.b;
 	var _n1 = author$project$Examples$Times$init;
 	var times = _n1.a;
 	var timesCmd = _n1.b;
-	var _n2 = author$project$Examples$Basic$init;
-	var basic = _n2.a;
-	var basicCmd = _n2.b;
+	var _n2 = author$project$Examples$Jitter$init;
+	var jitter = _n2.a;
+	var jitterCmd = _n2.b;
+	var _n3 = author$project$Examples$Delay$init;
+	var delay = _n3.a;
+	var delayCmd = _n3.b;
+	var _n4 = author$project$Examples$Basic$init;
+	var basic = _n4.a;
+	var basicCmd = _n4.b;
 	return _Utils_Tuple2(
-		{ar: basic, aD: times, co: title},
+		{as: basic, av: delay, az: jitter, aH: times, ct: title},
 		elm$core$Platform$Cmd$batch(
 			_List_fromArray(
 				[
 					A2(elm$core$Platform$Cmd$map, author$project$Examples$Main$TitleMsg, titleCmd),
 					A2(elm$core$Platform$Cmd$map, author$project$Examples$Main$BasicMsg, basicCmd),
-					A2(elm$core$Platform$Cmd$map, author$project$Examples$Main$TimesMsg, timesCmd)
+					A2(elm$core$Platform$Cmd$map, author$project$Examples$Main$TimesMsg, timesCmd),
+					A2(elm$core$Platform$Cmd$map, author$project$Examples$Main$DelayMsg, delayCmd),
+					A2(elm$core$Platform$Cmd$map, author$project$Examples$Main$JitterMsg, jitterCmd)
 				])));
 }();
 var author$project$Typewriter$Deleting = function (a) {
@@ -5367,7 +5512,7 @@ var author$project$Typewriter$nextStep = function (_n0) {
 			var count = _n1.a;
 			if (_Utils_cmp(
 				count,
-				author$project$Typewriter$currentWordLength(info.cu)) < 0) {
+				author$project$Typewriter$currentWordLength(info.l)) < 0) {
 				return _Utils_update(
 					info,
 					{
@@ -5375,15 +5520,15 @@ var author$project$Typewriter$nextStep = function (_n0) {
 					});
 			} else {
 				var _n2 = _Utils_Tuple2(
-					info.at,
-					wernerdegroot$listzipper$List$Zipper$next(info.cu));
+					info.au,
+					wernerdegroot$listzipper$List$Zipper$next(info.l));
 				if (((_n2.a.$ === 1) && (_n2.a.a === 1)) && (_n2.b.$ === 1)) {
 					var _n3 = _n2.b;
 					return _Utils_update(
 						info,
 						{
 							g: author$project$Typewriter$Done(
-								wernerdegroot$listzipper$List$Zipper$current(info.cu))
+								wernerdegroot$listzipper$List$Zipper$current(info.l))
 						});
 				} else {
 					return _Utils_update(
@@ -5401,7 +5546,7 @@ var author$project$Typewriter$nextStep = function (_n0) {
 			var count = _n1.a;
 			return (_Utils_cmp(
 				count,
-				author$project$Typewriter$currentWordLength(info.cu)) < 0) ? _Utils_update(
+				author$project$Typewriter$currentWordLength(info.l)) < 0) ? _Utils_update(
 				info,
 				{
 					g: author$project$Typewriter$Deleting(count + 1)
@@ -5409,13 +5554,13 @@ var author$project$Typewriter$nextStep = function (_n0) {
 				info,
 				{g: author$project$Typewriter$Next});
 		case 3:
-			var _n4 = wernerdegroot$listzipper$List$Zipper$next(info.cu);
+			var _n4 = wernerdegroot$listzipper$List$Zipper$next(info.l);
 			if (_n4.$ === 1) {
 				return _Utils_update(
 					info,
 					{
-						at: function () {
-							var _n5 = info.at;
+						au: function () {
+							var _n5 = info.au;
 							if (!_n5.$) {
 								return author$project$Typewriter$Infinite;
 							} else {
@@ -5424,7 +5569,7 @@ var author$project$Typewriter$nextStep = function (_n0) {
 							}
 						}(),
 						g: author$project$Typewriter$Typing(0),
-						cu: wernerdegroot$listzipper$List$Zipper$first(info.cu)
+						l: wernerdegroot$listzipper$List$Zipper$first(info.l)
 					});
 			} else {
 				var newWords = _n4.a;
@@ -5432,7 +5577,7 @@ var author$project$Typewriter$nextStep = function (_n0) {
 					info,
 					{
 						g: author$project$Typewriter$Typing(0),
-						cu: newWords
+						l: newWords
 					});
 			}
 		case 4:
@@ -5453,11 +5598,27 @@ var author$project$Typewriter$update = F2(
 			return _Utils_Tuple2(
 				_Utils_update(
 					info,
-					{a_: coeff}),
+					{a4: coeff}),
 				elm$core$Platform$Cmd$none);
 		}
 	});
 var author$project$Examples$Basic$update = F2(
+	function (msg, model) {
+		var typewriterMsg = msg;
+		return A2(
+			elm$core$Tuple$mapSecond,
+			elm$core$Platform$Cmd$map(elm$core$Basics$identity),
+			A2(author$project$Typewriter$update, typewriterMsg, model));
+	});
+var author$project$Examples$Delay$update = F2(
+	function (msg, model) {
+		var typewriterMsg = msg;
+		return A2(
+			elm$core$Tuple$mapSecond,
+			elm$core$Platform$Cmd$map(elm$core$Basics$identity),
+			A2(author$project$Typewriter$update, typewriterMsg, model));
+	});
+var author$project$Examples$Jitter$update = F2(
 	function (msg, model) {
 		var typewriterMsg = msg;
 		return A2(
@@ -5470,9 +5631,9 @@ var author$project$Typewriter$restart = function (_n0) {
 	var model = _Utils_update(
 		info,
 		{
-			at: info.b9,
+			au: info.a3.ay,
 			g: author$project$Typewriter$Typing(0),
-			cu: wernerdegroot$listzipper$List$Zipper$first(info.cu)
+			l: wernerdegroot$listzipper$List$Zipper$first(info.l)
 		});
 	return _Utils_Tuple2(
 		model,
@@ -5498,37 +5659,57 @@ var author$project$Examples$Main$update = F2(
 		switch (msg.$) {
 			case 0:
 				var typewriterMsg = msg.a;
-				var _n1 = A2(author$project$Typewriter$update, typewriterMsg, model.co);
+				var _n1 = A2(author$project$Typewriter$update, typewriterMsg, model.ct);
 				var title = _n1.a;
 				var cmd = _n1.b;
 				return _Utils_Tuple2(
 					_Utils_update(
 						model,
-						{co: title}),
+						{ct: title}),
 					A2(elm$core$Platform$Cmd$map, author$project$Examples$Main$TitleMsg, cmd));
 			case 1:
 				var basicMsg = msg.a;
-				var _n2 = A2(author$project$Examples$Basic$update, basicMsg, model.ar);
+				var _n2 = A2(author$project$Examples$Basic$update, basicMsg, model.as);
 				var basic = _n2.a;
 				var cmd = _n2.b;
 				return _Utils_Tuple2(
 					_Utils_update(
 						model,
-						{ar: basic}),
+						{as: basic}),
 					A2(elm$core$Platform$Cmd$map, author$project$Examples$Main$BasicMsg, cmd));
-			default:
+			case 2:
 				var timesMsg = msg.a;
-				var _n3 = A2(author$project$Examples$Times$update, timesMsg, model.aD);
+				var _n3 = A2(author$project$Examples$Times$update, timesMsg, model.aH);
 				var times = _n3.a;
 				var cmd = _n3.b;
 				return _Utils_Tuple2(
 					_Utils_update(
 						model,
-						{aD: times}),
+						{aH: times}),
 					A2(elm$core$Platform$Cmd$map, author$project$Examples$Main$TimesMsg, cmd));
+			case 3:
+				var delayMsg = msg.a;
+				var _n4 = A2(author$project$Examples$Delay$update, delayMsg, model.av);
+				var delay = _n4.a;
+				var cmd = _n4.b;
+				return _Utils_Tuple2(
+					_Utils_update(
+						model,
+						{av: delay}),
+					A2(elm$core$Platform$Cmd$map, author$project$Examples$Main$DelayMsg, cmd));
+			default:
+				var jitterMsg = msg.a;
+				var _n5 = A2(author$project$Examples$Jitter$update, jitterMsg, model.az);
+				var jitter = _n5.a;
+				var cmd = _n5.b;
+				return _Utils_Tuple2(
+					_Utils_update(
+						model,
+						{az: jitter}),
+					A2(elm$core$Platform$Cmd$map, author$project$Examples$Main$JitterMsg, cmd));
 		}
 	});
-var author$project$Examples$Basic$code = '\n    Typewriter.init\n        { words = ["one", "two", "three"]\n        , iterationCount = Typewriter.infinite\n        }\n    ';
+var author$project$Examples$Basic$code = '\n    Typewriter.withWords [ "one", "two", "three" ]\n        |> Typewriter.init\n    ';
 var rtfeldman$elm_css$Css$Preprocess$AppendProperty = function (a) {
 	return {$: 0, a: a};
 };
@@ -5538,7 +5719,7 @@ var rtfeldman$elm_css$Css$property = F2(
 	});
 var rtfeldman$elm_css$Css$prop1 = F2(
 	function (key, arg) {
-		return A2(rtfeldman$elm_css$Css$property, key, arg.cs);
+		return A2(rtfeldman$elm_css$Css$property, key, arg.cx);
 	});
 var rtfeldman$elm_css$Css$borderRadius = rtfeldman$elm_css$Css$prop1('border-radius');
 var rtfeldman$elm_css$Css$PxUnits = 0;
@@ -5547,23 +5728,23 @@ var rtfeldman$elm_css$Css$Structure$Compatible = 0;
 var rtfeldman$elm_css$Css$Internal$lengthConverter = F3(
 	function (units, unitLabel, numericValue) {
 		return {
-			ba: 0,
-			bj: 0,
-			W: 0,
-			l: 0,
-			aw: 0,
-			aa: 0,
-			B: 0,
+			bg: 0,
+			bp: 0,
+			X: 0,
+			m: 0,
+			aA: 0,
 			ab: 0,
+			C: 0,
 			ac: 0,
-			J: 0,
+			ad: 0,
 			K: 0,
-			u: 0,
-			E: numericValue,
-			aj: 0,
-			al: unitLabel,
-			aH: units,
-			cs: _Utils_ap(
+			L: 0,
+			v: 0,
+			F: numericValue,
+			ak: 0,
+			am: unitLabel,
+			aL: units,
+			cx: _Utils_ap(
 				elm$core$String$fromFloat(numericValue),
 				unitLabel)
 		};
@@ -5591,12 +5772,12 @@ var rtfeldman$elm_css$Css$withPrecedingHash = function (str) {
 };
 var rtfeldman$elm_css$Css$erroneousHex = function (str) {
 	return {
-		ap: 1,
-		as: 0,
-		t: 0,
-		av: 0,
-		aA: 0,
-		cs: rtfeldman$elm_css$Css$withPrecedingHash(str)
+		aq: 1,
+		at: 0,
+		u: 0,
+		ax: 0,
+		aE: 0,
+		cx: rtfeldman$elm_css$Css$withPrecedingHash(str)
 	};
 };
 var elm$core$Basics$composeR = F3(
@@ -5864,12 +6045,12 @@ var rtfeldman$elm_css$Css$validHex = F5(
 			var blue = _n6.a.a;
 			var alpha = _n6.b.a;
 			return {
-				ap: alpha / 255,
-				as: blue,
-				t: 0,
-				av: green,
-				aA: red,
-				cs: rtfeldman$elm_css$Css$withPrecedingHash(str)
+				aq: alpha / 255,
+				at: blue,
+				u: 0,
+				ax: green,
+				aE: red,
+				cx: rtfeldman$elm_css$Css$withPrecedingHash(str)
 			};
 		} else {
 			return rtfeldman$elm_css$Css$erroneousHex(str);
@@ -5970,9 +6151,9 @@ var rtfeldman$elm_css$Css$hex = function (str) {
 	}
 	return rtfeldman$elm_css$Css$erroneousHex(str);
 };
-var author$project$Theme$lighter = rtfeldman$elm_css$Css$hex('#62615D');
+var author$project$Theme$lighter = rtfeldman$elm_css$Css$hex('62615D');
 var rtfeldman$elm_css$Css$backgroundColor = function (c) {
-	return A2(rtfeldman$elm_css$Css$property, 'background-color', c.cs);
+	return A2(rtfeldman$elm_css$Css$property, 'background-color', c.cx);
 };
 var rtfeldman$elm_css$Css$prop3 = F4(
 	function (key, argA, argB, argC) {
@@ -5983,11 +6164,11 @@ var rtfeldman$elm_css$Css$prop3 = F4(
 				elm$core$String$join,
 				' ',
 				_List_fromArray(
-					[argA.cs, argB.cs, argC.cs])));
+					[argA.cx, argB.cx, argC.cx])));
 	});
 var rtfeldman$elm_css$Css$border3 = rtfeldman$elm_css$Css$prop3('border');
 var rtfeldman$elm_css$Css$color = function (c) {
-	return A2(rtfeldman$elm_css$Css$property, 'color', c.cs);
+	return A2(rtfeldman$elm_css$Css$property, 'color', c.cx);
 };
 var rtfeldman$elm_css$Css$Preprocess$ExtendSelector = F2(
 	function (a, b) {
@@ -6004,21 +6185,21 @@ var rtfeldman$elm_css$Css$disabled = rtfeldman$elm_css$Css$pseudoClass('disabled
 var rtfeldman$elm_css$Css$fontFamily = rtfeldman$elm_css$Css$prop1('font-family');
 var rtfeldman$elm_css$Css$fontSize = rtfeldman$elm_css$Css$prop1('font-size');
 var rtfeldman$elm_css$Css$Internal$IncompatibleUnits = 0;
-var rtfeldman$elm_css$Css$initial = {bc: 0, bd: 0, aq: 0, be: 0, R: 0, bf: 0, S: 0, x: 0, n: 0, aK: 0, t: 0, a: 0, f: 0, W: 0, a0: 0, au: 0, aM: 0, H: 0, l: 0, X: 0, d: 0, A: 0, aN: 0, bw: 0, a1: 0, aw: 0, aa: 0, B: 0, ab: 0, ac: 0, J: 0, K: 0, u: 0, aO: 0, c: 0, b: 0, a3: 0, ay: 0, E: 0, aR: 0, ad: 0, r: 0, aV: 0, ai: 0, O: 0, aj: 0, ak: 0, P: 0, p: 0, al: '', aH: 0, cs: 'initial', aI: 0, G: 0};
+var rtfeldman$elm_css$Css$initial = {bi: 0, bj: 0, ar: 0, bk: 0, S: 0, bl: 0, T: 0, y: 0, o: 0, aP: 0, u: 0, a: 0, f: 0, X: 0, a6: 0, aw: 0, aQ: 0, I: 0, m: 0, Y: 0, d: 0, B: 0, aR: 0, bC: 0, a7: 0, aA: 0, ab: 0, C: 0, ac: 0, ad: 0, K: 0, L: 0, v: 0, aS: 0, c: 0, b: 0, a9: 0, aC: 0, F: 0, aV: 0, ae: 0, s: 0, aZ: 0, aj: 0, P: 0, ak: 0, al: 0, Q: 0, q: 0, am: '', aL: 0, cx: 'initial', aM: 0, H: 0};
 var rtfeldman$elm_css$Css$inherit = _Utils_update(
 	rtfeldman$elm_css$Css$initial,
-	{cs: 'inherit'});
+	{cx: 'inherit'});
 var rtfeldman$elm_css$Css$UnitlessFloat = 0;
 var rtfeldman$elm_css$Css$num = function (val) {
 	return {
-		K: 0,
-		u: 0,
-		ay: 0,
-		aP: 0,
-		E: val,
-		al: '',
-		aH: 0,
-		cs: elm$core$String$fromFloat(val)
+		L: 0,
+		v: 0,
+		aC: 0,
+		aT: 0,
+		F: val,
+		am: '',
+		aL: 0,
+		cx: elm$core$String$fromFloat(val)
 	};
 };
 var rtfeldman$elm_css$Css$opacity = rtfeldman$elm_css$Css$prop1('opacity');
@@ -6031,10 +6212,10 @@ var rtfeldman$elm_css$Css$prop2 = F3(
 				elm$core$String$join,
 				' ',
 				_List_fromArray(
-					[argA.cs, argB.cs])));
+					[argA.cx, argB.cx])));
 	});
 var rtfeldman$elm_css$Css$padding2 = rtfeldman$elm_css$Css$prop2('padding');
-var rtfeldman$elm_css$Css$solid = {n: 0, O: 0, cs: 'solid'};
+var rtfeldman$elm_css$Css$solid = {o: 0, P: 0, cx: 'solid'};
 var rtfeldman$elm_css$VirtualDom$Styled$Node = F3(
 	function (a, b, c) {
 		return {$: 0, a: a, b: b, c: c};
@@ -6071,7 +6252,7 @@ var rtfeldman$elm_css$VirtualDom$Styled$Attribute = F3(
 	});
 var Skinney$murmur3$Murmur3$HashData = F4(
 	function (shift, seed, hash, charsProcessed) {
-		return {T: charsProcessed, Z: hash, N: seed, ag: shift};
+		return {U: charsProcessed, _: hash, O: seed, ah: shift};
 	});
 var Skinney$murmur3$Murmur3$c1 = 3432918353;
 var Skinney$murmur3$Murmur3$c2 = 461845907;
@@ -6087,14 +6268,14 @@ var Skinney$murmur3$Murmur3$rotlBy = F2(
 	});
 var elm$core$Basics$neq = _Utils_notEqual;
 var Skinney$murmur3$Murmur3$finalize = function (data) {
-	var acc = data.Z ? (data.N ^ A2(
+	var acc = data._ ? (data.O ^ A2(
 		Skinney$murmur3$Murmur3$multiplyBy,
 		Skinney$murmur3$Murmur3$c2,
 		A2(
 			Skinney$murmur3$Murmur3$rotlBy,
 			15,
-			A2(Skinney$murmur3$Murmur3$multiplyBy, Skinney$murmur3$Murmur3$c1, data.Z)))) : data.N;
-	var h0 = acc ^ data.T;
+			A2(Skinney$murmur3$Murmur3$multiplyBy, Skinney$murmur3$Murmur3$c1, data._)))) : data.O;
+	var h0 = acc ^ data.U;
 	var h1 = A2(Skinney$murmur3$Murmur3$multiplyBy, 2246822507, h0 ^ (h0 >>> 16));
 	var h2 = A2(Skinney$murmur3$Murmur3$multiplyBy, 3266489909, h1 ^ (h1 >>> 13));
 	return (h2 ^ (h2 >>> 16)) >>> 0;
@@ -6117,17 +6298,17 @@ var Skinney$murmur3$Murmur3$mix = F2(
 	});
 var Skinney$murmur3$Murmur3$hashFold = F2(
 	function (c, data) {
-		var res = data.Z | ((255 & elm$core$Char$toCode(c)) << data.ag);
-		var _n0 = data.ag;
+		var res = data._ | ((255 & elm$core$Char$toCode(c)) << data.ah);
+		var _n0 = data.ah;
 		if (_n0 === 24) {
 			return {
-				T: data.T + 1,
-				Z: 0,
-				N: A2(Skinney$murmur3$Murmur3$mix, data.N, res),
-				ag: 0
+				U: data.U + 1,
+				_: 0,
+				O: A2(Skinney$murmur3$Murmur3$mix, data.O, res),
+				ah: 0
 			};
 		} else {
-			return {T: data.T + 1, Z: res, N: data.N, ag: data.ag + 8};
+			return {U: data.U + 1, _: res, O: data.O, ah: data.ah + 8};
 		}
 	});
 var elm$core$String$foldl = _String_foldl;
@@ -6152,7 +6333,7 @@ var elm$core$List$singleton = function (value) {
 		[value]);
 };
 var rtfeldman$elm_css$Css$Preprocess$stylesheet = function (snippets) {
-	return {bl: elm$core$Maybe$Nothing, bt: _List_Nil, bz: _List_Nil, bM: snippets};
+	return {br: elm$core$Maybe$Nothing, bz: _List_Nil, bF: _List_Nil, bS: snippets};
 };
 var elm$core$List$append = F2(
 	function (xs, ys) {
@@ -7157,7 +7338,7 @@ var rtfeldman$elm_css$Css$Preprocess$Resolve$applyStyles = F2(
 						_List_fromArray(
 							[
 								rtfeldman$elm_css$Css$Structure$Keyframes(
-								{b$: str, cd: name})
+								{b5: str, ci: name})
 							]));
 				case 4:
 					var _n12 = styles.a;
@@ -7292,13 +7473,13 @@ var rtfeldman$elm_css$Css$Preprocess$Resolve$toDeclarations = function (snippetD
 	}
 };
 var rtfeldman$elm_css$Css$Preprocess$Resolve$toStructure = function (_n0) {
-	var charset = _n0.bl;
-	var imports = _n0.bt;
-	var namespaces = _n0.bz;
-	var snippets = _n0.bM;
+	var charset = _n0.br;
+	var imports = _n0.bz;
+	var namespaces = _n0.bF;
+	var snippets = _n0.bS;
 	var declarations = rtfeldman$elm_css$Css$Preprocess$Resolve$extract(
 		A2(elm$core$List$concatMap, rtfeldman$elm_css$Css$Preprocess$unwrapSnippet, snippets));
-	return {bl: charset, b0: declarations, bt: imports, bz: namespaces};
+	return {br: charset, b6: declarations, bz: imports, bF: namespaces};
 };
 var elm$core$Dict$RBEmpty_elm_builtin = {$: -2};
 var elm$core$Dict$empty = elm$core$Dict$RBEmpty_elm_builtin;
@@ -7483,8 +7664,8 @@ var rtfeldman$elm_css$Css$Structure$compactHelp = F2(
 					A2(elm$core$List$cons, declaration, declarations));
 			case 6:
 				var record = declaration.a;
-				return elm$core$String$isEmpty(record.b$) ? _Utils_Tuple2(keyframesByName, declarations) : _Utils_Tuple2(
-					A3(elm$core$Dict$insert, record.cd, record.b$, keyframesByName),
+				return elm$core$String$isEmpty(record.b5) ? _Utils_Tuple2(keyframesByName, declarations) : _Utils_Tuple2(
+					A3(elm$core$Dict$insert, record.ci, record.b5, keyframesByName),
 					declarations);
 			case 7:
 				var properties = declaration.a;
@@ -7519,16 +7700,16 @@ var rtfeldman$elm_css$Css$Structure$withKeyframeDeclarations = F2(
 					var name = _n0.a;
 					var decl = _n0.b;
 					return rtfeldman$elm_css$Css$Structure$Keyframes(
-						{b$: decl, cd: name});
+						{b5: decl, ci: name});
 				},
 				elm$core$Dict$toList(keyframesByName)),
 			compactedDeclarations);
 	});
 var rtfeldman$elm_css$Css$Structure$compactStylesheet = function (_n0) {
-	var charset = _n0.bl;
-	var imports = _n0.bt;
-	var namespaces = _n0.bz;
-	var declarations = _n0.b0;
+	var charset = _n0.br;
+	var imports = _n0.bz;
+	var namespaces = _n0.bF;
+	var declarations = _n0.b6;
 	var _n1 = A3(
 		elm$core$List$foldr,
 		rtfeldman$elm_css$Css$Structure$compactHelp,
@@ -7537,7 +7718,7 @@ var rtfeldman$elm_css$Css$Structure$compactStylesheet = function (_n0) {
 	var keyframesByName = _n1.a;
 	var compactedDeclarations = _n1.b;
 	var finalDeclarations = A2(rtfeldman$elm_css$Css$Structure$withKeyframeDeclarations, keyframesByName, compactedDeclarations);
-	return {bl: charset, b0: finalDeclarations, bt: imports, bz: namespaces};
+	return {br: charset, b6: finalDeclarations, bz: imports, bF: namespaces};
 };
 var elm$core$List$filter = F2(
 	function (isGood, list) {
@@ -7562,13 +7743,13 @@ var rtfeldman$elm_css$Css$Structure$Output$charsetToString = function (charset) 
 			charset));
 };
 var rtfeldman$elm_css$Css$Structure$Output$mediaExpressionToString = function (expression) {
-	return '(' + (expression.bq + (A2(
+	return '(' + (expression.bw + (A2(
 		elm$core$Maybe$withDefault,
 		'',
 		A2(
 			elm$core$Maybe$map,
 			elm$core$Basics$append(': '),
-			expression.cs)) + ')'));
+			expression.cx)) + ')'));
 };
 var rtfeldman$elm_css$Css$Structure$Output$mediaTypeToString = function (mediaType) {
 	switch (mediaType) {
@@ -7810,8 +7991,8 @@ var rtfeldman$elm_css$Css$Structure$Output$prettyPrintDeclaration = function (de
 		case 5:
 			return 'TODO';
 		case 6:
-			var name = decl.a.cd;
-			var declaration = decl.a.b$;
+			var name = decl.a.ci;
+			var declaration = decl.a.b5;
 			return '@keyframes ' + (name + (' {\n' + (declaration + '\n}')));
 		case 7:
 			return 'TODO';
@@ -7822,10 +8003,10 @@ var rtfeldman$elm_css$Css$Structure$Output$prettyPrintDeclaration = function (de
 	}
 };
 var rtfeldman$elm_css$Css$Structure$Output$prettyPrint = function (_n0) {
-	var charset = _n0.bl;
-	var imports = _n0.bt;
-	var namespaces = _n0.bz;
-	var declarations = _n0.b0;
+	var charset = _n0.br;
+	var imports = _n0.bz;
+	var namespaces = _n0.bF;
+	var declarations = _n0.b6;
 	return A2(
 		elm$core$String$join,
 		'\n\n',
@@ -7994,17 +8175,17 @@ var author$project$Layout$viewButton = function (config) {
 			]),
 		_List_fromArray(
 			[
-				rtfeldman$elm_css$Html$Styled$Events$onClick(config.ce),
-				rtfeldman$elm_css$Html$Styled$Attributes$disabled(config.b1)
+				rtfeldman$elm_css$Html$Styled$Events$onClick(config.cj),
+				rtfeldman$elm_css$Html$Styled$Attributes$disabled(config.b7)
 			]),
 		_List_fromArray(
 			[
-				rtfeldman$elm_css$Html$Styled$text(config.cb)
+				rtfeldman$elm_css$Html$Styled$text(config.cg)
 			]));
 };
 var author$project$Theme$secondary = rtfeldman$elm_css$Css$hex('F5F0E6');
-var rtfeldman$elm_css$Css$ellipsis = {bP: 0, cs: 'ellipsis'};
-var rtfeldman$elm_css$Css$hidden = {n: 0, ad: 0, cs: 'hidden', aI: 0};
+var rtfeldman$elm_css$Css$ellipsis = {bV: 0, cx: 'ellipsis'};
+var rtfeldman$elm_css$Css$hidden = {o: 0, ae: 0, cx: 'hidden', aM: 0};
 var rtfeldman$elm_css$Css$prop4 = F5(
 	function (key, argA, argB, argC, argD) {
 		return A2(
@@ -8014,14 +8195,14 @@ var rtfeldman$elm_css$Css$prop4 = F5(
 				elm$core$String$join,
 				' ',
 				_List_fromArray(
-					[argA.cs, argB.cs, argC.cs, argD.cs])));
+					[argA.cx, argB.cx, argC.cx, argD.cx])));
 	});
 var rtfeldman$elm_css$Css$margin4 = rtfeldman$elm_css$Css$prop4('margin');
 var rtfeldman$elm_css$Css$marginBottom = rtfeldman$elm_css$Css$prop1('margin-bottom');
 var rtfeldman$elm_css$Css$overflow = rtfeldman$elm_css$Css$prop1('overflow');
 var rtfeldman$elm_css$Css$textOverflow = rtfeldman$elm_css$Css$prop1('text-overflow');
 var rtfeldman$elm_css$Css$UnitlessInteger = 0;
-var rtfeldman$elm_css$Css$zero = {aw: 0, aa: 0, B: 0, ab: 0, ac: 0, J: 0, K: 0, ay: 0, E: 0, aR: 0, al: '', aH: 0, cs: '0'};
+var rtfeldman$elm_css$Css$zero = {aA: 0, ab: 0, C: 0, ac: 0, ad: 0, K: 0, L: 0, aC: 0, F: 0, aV: 0, am: '', aL: 0, cx: '0'};
 var rtfeldman$elm_css$Html$Styled$code = rtfeldman$elm_css$Html$Styled$node('code');
 var rtfeldman$elm_css$Html$Styled$div = rtfeldman$elm_css$Html$Styled$node('div');
 var rtfeldman$elm_css$Html$Styled$h2 = rtfeldman$elm_css$Html$Styled$node('h2');
@@ -8050,7 +8231,7 @@ var author$project$Layout$example = function (config) {
 				_List_Nil,
 				_List_fromArray(
 					[
-						rtfeldman$elm_css$Html$Styled$text(config.co)
+						rtfeldman$elm_css$Html$Styled$text(config.ct)
 					])),
 				A4(
 				rtfeldman$elm_css$Html$Styled$styled,
@@ -8068,7 +8249,7 @@ var author$project$Layout$example = function (config) {
 				_List_Nil,
 				_List_fromArray(
 					[
-						rtfeldman$elm_css$Html$Styled$text('>> ' + config.cn)
+						rtfeldman$elm_css$Html$Styled$text('>> ' + config.cs)
 					])),
 				A4(
 				rtfeldman$elm_css$Html$Styled$styled,
@@ -8083,7 +8264,7 @@ var author$project$Layout$example = function (config) {
 						rtfeldman$elm_css$Css$zero)
 					]),
 				_List_Nil,
-				A2(elm$core$List$map, author$project$Layout$viewButton, config.bY)),
+				A2(elm$core$List$map, author$project$Layout$viewButton, config.b2)),
 				A4(
 				rtfeldman$elm_css$Html$Styled$styled,
 				rtfeldman$elm_css$Html$Styled$pre,
@@ -8101,7 +8282,7 @@ var author$project$Layout$example = function (config) {
 						_List_Nil,
 						_List_fromArray(
 							[
-								rtfeldman$elm_css$Html$Styled$text(config.b_)
+								rtfeldman$elm_css$Html$Styled$text(config.b4)
 							]))
 					]))
 			]));
@@ -8117,7 +8298,7 @@ var elm$core$String$left = F2(
 var author$project$Typewriter$view = function (_n0) {
 	var info = _n0;
 	var mode = info.g;
-	var words = info.cu;
+	var words = info.l;
 	switch (mode.$) {
 		case 0:
 			var count = mode.a;
@@ -8149,12 +8330,33 @@ var author$project$Typewriter$view = function (_n0) {
 var author$project$Examples$Basic$view = function (model) {
 	return author$project$Layout$example(
 		{
-			bY: _List_Nil,
-			b_: author$project$Examples$Basic$code,
-			cn: author$project$Typewriter$view(model),
-			co: 'Basic'
+			b2: _List_Nil,
+			b4: author$project$Examples$Basic$code,
+			cs: author$project$Typewriter$view(model),
+			ct: 'Basic'
 		});
 };
+var author$project$Examples$Delay$code = '\n    Typewriter.withWords [ "supercalifragilisticexpialidocious" ]\n        |> Typwriter.withTypeDelay 600\n        |> Typwriter.withBackspaceDelay 10\n        |> Typewriter.init\n    ';
+var author$project$Examples$Delay$view = function (model) {
+	return author$project$Layout$example(
+		{
+			b2: _List_Nil,
+			b4: author$project$Examples$Delay$code,
+			cs: author$project$Typewriter$view(model),
+			ct: 'Slow It Down'
+		});
+};
+var author$project$Examples$Jitter$code = '\n    Typewriter.withWords [ "Maybe I drank too much soda this morning..." ]\n        |> Typewriter.withJitter\n            (Random.Extra.frequency\n                ( 10, Random.constant 1 )\n                [ ( 1, Random.constant 15 ) ]\n            )\n        |> Typewriter.init\n    ';
+var author$project$Examples$Jitter$view = function (model) {
+	return author$project$Layout$example(
+		{
+			b2: _List_Nil,
+			b4: author$project$Examples$Jitter$code,
+			cs: author$project$Typewriter$view(model),
+			ct: 'Hiccups'
+		});
+};
+var author$project$Theme$accent = rtfeldman$elm_css$Css$hex('FF5050');
 var author$project$Theme$primary = rtfeldman$elm_css$Css$hex('383735');
 var rtfeldman$elm_css$Css$center = rtfeldman$elm_css$Css$prop1('center');
 var rtfeldman$elm_css$Css$Internal$property = F2(
@@ -8228,9 +8430,10 @@ var rtfeldman$elm_css$Css$textAlign = function (fn) {
 		'text-align',
 		fn(rtfeldman$elm_css$Css$Internal$lengthForOverloadedProperty));
 };
+var rtfeldman$elm_css$Html$Styled$em = rtfeldman$elm_css$Html$Styled$node('em');
 var rtfeldman$elm_css$Html$Styled$h1 = rtfeldman$elm_css$Html$Styled$node('h1');
 var author$project$Examples$Main$viewTitle = function (_n0) {
-	var title = _n0.co;
+	var title = _n0.ct;
 	return A4(
 		rtfeldman$elm_css$Html$Styled$styled,
 		rtfeldman$elm_css$Html$Styled$h1,
@@ -8255,12 +8458,24 @@ var author$project$Examples$Main$viewTitle = function (_n0) {
 		_List_Nil,
 		_List_fromArray(
 			[
-				rtfeldman$elm_css$Html$Styled$text(
-				'Typewriter Is ' + author$project$Typewriter$view(title))
+				rtfeldman$elm_css$Html$Styled$text('Typewriter Is '),
+				A4(
+				rtfeldman$elm_css$Html$Styled$styled,
+				rtfeldman$elm_css$Html$Styled$em,
+				_List_fromArray(
+					[
+						rtfeldman$elm_css$Css$color(author$project$Theme$accent)
+					]),
+				_List_Nil,
+				_List_fromArray(
+					[
+						rtfeldman$elm_css$Html$Styled$text(
+						author$project$Typewriter$view(title))
+					]))
 			]));
 };
 var author$project$Examples$Times$Replay = {$: 1};
-var author$project$Examples$Times$code = '\n    Typewriter.init\n        { words = [ "First Phrase", "Last Phrase"]\n        , iterationCount = Typewriter.times 2\n        }\n    ';
+var author$project$Examples$Times$code = '\n    Typewriter.withWords [ "First Phrase", "Last Phrase" ]\n        |> Typewriter.iterations (Typewriter.times 2)\n        |> Typewriter.init\n    ';
 var author$project$Typewriter$isDone = function (_n0) {
 	var mode = _n0.g;
 	_n1$2:
@@ -8283,23 +8498,23 @@ var author$project$Typewriter$isDone = function (_n0) {
 var author$project$Examples$Times$view = function (model) {
 	return author$project$Layout$example(
 		{
-			bY: _List_fromArray(
+			b2: _List_fromArray(
 				[
 					{
-					b1: !author$project$Typewriter$isDone(model),
-					cb: 'Replay',
-					ce: author$project$Examples$Times$Replay
+					b7: !author$project$Typewriter$isDone(model),
+					cg: 'Replay',
+					cj: author$project$Examples$Times$Replay
 				}
 				]),
-			b_: author$project$Examples$Times$code,
-			cn: author$project$Typewriter$view(model),
-			co: 'Fixed Iterations'
+			b4: author$project$Examples$Times$code,
+			cs: author$project$Typewriter$view(model),
+			ct: 'Just a Few'
 		});
 };
-var rtfeldman$elm_css$Css$auto = {bU: 0, a: 0, W: 0, aN: 0, ca: 0, aa: 0, B: 0, u: 0, ad: 0, r: 0, aV: 0, ak: 0, p: 0, cs: 'auto'};
+var rtfeldman$elm_css$Css$auto = {b_: 0, a: 0, X: 0, aR: 0, cf: 0, ab: 0, C: 0, v: 0, ae: 0, s: 0, aZ: 0, al: 0, q: 0, cx: 'auto'};
 var rtfeldman$elm_css$Css$stringsToValue = function (list) {
-	return elm$core$List$isEmpty(list) ? {cs: 'none'} : {
-		cs: A2(
+	return elm$core$List$isEmpty(list) ? {cx: 'none'} : {
+		cx: A2(
 			elm$core$String$join,
 			', ',
 			A2(
@@ -8318,7 +8533,7 @@ var rtfeldman$elm_css$Css$height = rtfeldman$elm_css$Css$prop1('height');
 var rtfeldman$elm_css$Css$margin2 = rtfeldman$elm_css$Css$prop2('margin');
 var rtfeldman$elm_css$Css$maxWidth = rtfeldman$elm_css$Css$prop1('max-width');
 var rtfeldman$elm_css$Css$minHeight = rtfeldman$elm_css$Css$prop1('min-height');
-var rtfeldman$elm_css$Css$monospace = {H: 0, cs: 'monospace'};
+var rtfeldman$elm_css$Css$monospace = {I: 0, cx: 'monospace'};
 var rtfeldman$elm_css$Css$PercentageUnits = 0;
 var rtfeldman$elm_css$Css$pct = A2(rtfeldman$elm_css$Css$Internal$lengthConverter, 0, '%');
 var rtfeldman$elm_css$Css$qt = function (str) {
@@ -8355,6 +8570,8 @@ var rtfeldman$elm_css$Css$Global$typeSelector = F2(
 			]);
 	});
 var rtfeldman$elm_css$Css$Global$html = rtfeldman$elm_css$Css$Global$typeSelector('html');
+var rtfeldman$elm_css$Html$Styled$a = rtfeldman$elm_css$Html$Styled$node('a');
+var rtfeldman$elm_css$Html$Styled$footer = rtfeldman$elm_css$Html$Styled$node('footer');
 var rtfeldman$elm_css$Html$Styled$main_ = rtfeldman$elm_css$Html$Styled$node('main');
 var elm$virtual_dom$VirtualDom$map = _VirtualDom_map;
 var rtfeldman$elm_css$VirtualDom$Styled$KeyedNode = F3(
@@ -8467,83 +8684,131 @@ var rtfeldman$elm_css$VirtualDom$Styled$map = F2(
 		}
 	});
 var rtfeldman$elm_css$Html$Styled$map = rtfeldman$elm_css$VirtualDom$Styled$map;
+var rtfeldman$elm_css$Html$Styled$small = rtfeldman$elm_css$Html$Styled$node('small');
+var rtfeldman$elm_css$Html$Styled$Attributes$stringProperty = F2(
+	function (key, string) {
+		return A2(
+			rtfeldman$elm_css$VirtualDom$Styled$property,
+			key,
+			elm$json$Json$Encode$string(string));
+	});
+var rtfeldman$elm_css$Html$Styled$Attributes$href = function (url) {
+	return A2(rtfeldman$elm_css$Html$Styled$Attributes$stringProperty, 'href', url);
+};
 var author$project$Examples$Main$view = function (model) {
-	return A4(
-		rtfeldman$elm_css$Html$Styled$styled,
-		rtfeldman$elm_css$Html$Styled$main_,
-		_List_fromArray(
-			[
-				rtfeldman$elm_css$Css$maxWidth(
-				rtfeldman$elm_css$Css$px(760)),
-				A2(
-				rtfeldman$elm_css$Css$margin2,
-				rtfeldman$elm_css$Css$px(20),
-				rtfeldman$elm_css$Css$auto)
-			]),
+	return A2(
+		rtfeldman$elm_css$Html$Styled$div,
 		_List_Nil,
 		_List_fromArray(
 			[
-				rtfeldman$elm_css$Css$Global$global(
-				_List_fromArray(
-					[
-						rtfeldman$elm_css$Css$Global$html(
-						_List_fromArray(
-							[
-								rtfeldman$elm_css$Css$minHeight(
-								rtfeldman$elm_css$Css$vh(100)),
-								rtfeldman$elm_css$Css$backgroundColor(author$project$Theme$secondary),
-								rtfeldman$elm_css$Css$color(author$project$Theme$primary),
-								rtfeldman$elm_css$Css$fontFamilies(
-								_List_fromArray(
-									[
-										rtfeldman$elm_css$Css$qt('IBM Plex Mono'),
-										function ($) {
-										return $.cs;
-									}(rtfeldman$elm_css$Css$monospace)
-									]))
-							]))
-					])),
 				A4(
 				rtfeldman$elm_css$Html$Styled$styled,
-				rtfeldman$elm_css$Html$Styled$div,
+				rtfeldman$elm_css$Html$Styled$main_,
 				_List_fromArray(
 					[
-						A3(
-						rtfeldman$elm_css$Css$border3,
-						rtfeldman$elm_css$Css$px(4),
-						rtfeldman$elm_css$Css$solid,
-						author$project$Theme$primary),
-						rtfeldman$elm_css$Css$height(
-						rtfeldman$elm_css$Css$pct(100)),
-						rtfeldman$elm_css$Css$marginBottom(
-						rtfeldman$elm_css$Css$px(20)),
-						author$project$Theme$borderRadius
+						rtfeldman$elm_css$Css$maxWidth(
+						rtfeldman$elm_css$Css$px(760)),
+						A2(
+						rtfeldman$elm_css$Css$margin2,
+						rtfeldman$elm_css$Css$px(20),
+						rtfeldman$elm_css$Css$auto)
 					]),
 				_List_Nil,
 				_List_fromArray(
 					[
-						author$project$Examples$Main$viewTitle(model),
+						rtfeldman$elm_css$Css$Global$global(
+						_List_fromArray(
+							[
+								rtfeldman$elm_css$Css$Global$html(
+								_List_fromArray(
+									[
+										rtfeldman$elm_css$Css$minHeight(
+										rtfeldman$elm_css$Css$vh(100)),
+										rtfeldman$elm_css$Css$backgroundColor(author$project$Theme$secondary),
+										rtfeldman$elm_css$Css$color(author$project$Theme$primary),
+										rtfeldman$elm_css$Css$fontFamilies(
+										_List_fromArray(
+											[
+												rtfeldman$elm_css$Css$qt('IBM Plex Mono'),
+												function ($) {
+												return $.cx;
+											}(rtfeldman$elm_css$Css$monospace)
+											]))
+									]))
+							])),
 						A4(
 						rtfeldman$elm_css$Html$Styled$styled,
 						rtfeldman$elm_css$Html$Styled$div,
 						_List_fromArray(
 							[
-								A2(
-								rtfeldman$elm_css$Css$padding2,
-								rtfeldman$elm_css$Css$zero,
-								rtfeldman$elm_css$Css$px(12))
+								A3(
+								rtfeldman$elm_css$Css$border3,
+								rtfeldman$elm_css$Css$px(4),
+								rtfeldman$elm_css$Css$solid,
+								author$project$Theme$primary),
+								rtfeldman$elm_css$Css$height(
+								rtfeldman$elm_css$Css$pct(100)),
+								rtfeldman$elm_css$Css$marginBottom(
+								rtfeldman$elm_css$Css$px(20)),
+								author$project$Theme$borderRadius
 							]),
 						_List_Nil,
 						_List_fromArray(
 							[
-								A2(
-								rtfeldman$elm_css$Html$Styled$map,
-								author$project$Examples$Main$BasicMsg,
-								author$project$Examples$Basic$view(model.ar)),
-								A2(
-								rtfeldman$elm_css$Html$Styled$map,
-								author$project$Examples$Main$TimesMsg,
-								author$project$Examples$Times$view(model.aD))
+								author$project$Examples$Main$viewTitle(model),
+								A4(
+								rtfeldman$elm_css$Html$Styled$styled,
+								rtfeldman$elm_css$Html$Styled$div,
+								_List_fromArray(
+									[
+										A2(
+										rtfeldman$elm_css$Css$padding2,
+										rtfeldman$elm_css$Css$zero,
+										rtfeldman$elm_css$Css$px(12))
+									]),
+								_List_Nil,
+								_List_fromArray(
+									[
+										author$project$Examples$Basic$view(model.as),
+										A2(
+										rtfeldman$elm_css$Html$Styled$map,
+										author$project$Examples$Main$TimesMsg,
+										author$project$Examples$Times$view(model.aH)),
+										author$project$Examples$Delay$view(model.av),
+										author$project$Examples$Jitter$view(model.az)
+									]))
+							]))
+					])),
+				A4(
+				rtfeldman$elm_css$Html$Styled$styled,
+				rtfeldman$elm_css$Html$Styled$footer,
+				_List_fromArray(
+					[
+						rtfeldman$elm_css$Css$textAlign(rtfeldman$elm_css$Css$center)
+					]),
+				_List_Nil,
+				_List_fromArray(
+					[
+						A2(
+						rtfeldman$elm_css$Html$Styled$small,
+						_List_Nil,
+						_List_fromArray(
+							[
+								A4(
+								rtfeldman$elm_css$Html$Styled$styled,
+								rtfeldman$elm_css$Html$Styled$a,
+								_List_fromArray(
+									[
+										rtfeldman$elm_css$Css$color(author$project$Theme$accent)
+									]),
+								_List_fromArray(
+									[
+										rtfeldman$elm_css$Html$Styled$Attributes$href('https://github.com/mthadley/elm-typewriter')
+									]),
+								_List_fromArray(
+									[
+										rtfeldman$elm_css$Html$Styled$text('Github')
+									]))
 							]))
 					]))
 			]));
@@ -8571,7 +8836,7 @@ var elm$core$String$contains = _String_contains;
 var elm$core$String$toInt = _String_toInt;
 var elm$url$Url$Url = F6(
 	function (protocol, host, port_, path, query, fragment) {
-		return {br: fragment, bs: host, bB: path, bD: port_, bG: protocol, bH: query};
+		return {bx: fragment, by: host, bH: path, bJ: port_, bM: protocol, bN: query};
 	});
 var elm$url$Url$chompBeforePath = F5(
 	function (protocol, path, params, frag, str) {
@@ -9157,14 +9422,14 @@ var rtfeldman$elm_css$VirtualDom$Styled$toUnstyled = function (vdom) {
 var rtfeldman$elm_css$Html$Styled$toUnstyled = rtfeldman$elm_css$VirtualDom$Styled$toUnstyled;
 var author$project$Examples$Main$main = elm$browser$Browser$element(
 	{
-		b8: function (_n0) {
+		ce: function (_n0) {
 			return author$project$Examples$Main$init;
 		},
-		cm: function (_n1) {
+		cr: function (_n1) {
 			return elm$core$Platform$Sub$none;
 		},
-		cp: author$project$Examples$Main$update,
-		ct: A2(elm$core$Basics$composeR, author$project$Examples$Main$view, rtfeldman$elm_css$Html$Styled$toUnstyled)
+		cu: author$project$Examples$Main$update,
+		cy: A2(elm$core$Basics$composeR, author$project$Examples$Main$view, rtfeldman$elm_css$Html$Styled$toUnstyled)
 	});
 _Platform_export({'Examples':{'Main':{'init':author$project$Examples$Main$main(
 	elm$json$Json$Decode$succeed(0))(0)}}});}(this));
