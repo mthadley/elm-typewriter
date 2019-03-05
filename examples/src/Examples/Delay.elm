@@ -44,7 +44,7 @@ code : String
 code =
     """
     Typewriter.withWords [ "supercalifragilisticexpialidocious" ]
-        |> Typwriter.withTypeDelay 600
-        |> Typwriter.withBackspaceDelay 10
+        |> Tyepwriter.withTypeDelay 600
+        |> Typewriter.withBackspaceDelay 10
         |> Typewriter.init
     """
