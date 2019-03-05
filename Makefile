@@ -6,7 +6,7 @@ all: docs documentation.json
 
 .PHONY: clean
 clean:
-	rm -fr node_modules elm-stuff dist
+	rm -fr node_modules elm-stuff
 
 .PHONY: build
 build: node_modules elm.json $(ELM_FILES)
