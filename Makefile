@@ -6,7 +6,7 @@ all: docs documentation.json
 
 .PHONY: clean
 clean:
-	rm -fr node_modules elm-stuff
+	rm -fr node_modules elm-stuff examples/elm-stuff
 
 .PHONY: build
 build: node_modules elm.json $(ELM_FILES)
@@ -17,6 +17,7 @@ node_modules: package.json
 
 docs: node_modules $(ELM_FILES) $(EXAMPLE_FILES)
 	cd examples; npx elm make --optimize --output=../$@/index.html src/Main.elm
+	touch $@
 
 documentation.json: $(ELM_Files)
 	npx elm make --docs=$@
