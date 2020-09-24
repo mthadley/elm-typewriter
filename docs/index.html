@@ -187,12 +187,6 @@ function _Utils_eq(x, y)
 
 function _Utils_eqHelp(x, y, depth, stack)
 {
-	if (depth > 100)
-	{
-		stack.push(_Utils_Tuple2(x,y));
-		return true;
-	}
-
 	if (x === y)
 	{
 		return true;
@@ -202,6 +196,12 @@ function _Utils_eqHelp(x, y, depth, stack)
 	{
 		typeof x === 'function' && _Debug_crash(5);
 		return false;
+	}
+
+	if (depth > 100)
+	{
+		stack.push(_Utils_Tuple2(x,y));
+		return true;
 	}
 
 	/**_UNUSED/
@@ -262,7 +262,7 @@ function _Utils_cmp(x, y, ord)
 	//*/
 
 	/**/
-	if (!x.$)
+	if (typeof x.$ === 'undefined')
 	//*/
 	/**_UNUSED/
 	if (x.$[0] === '#')
@@ -643,6 +643,16 @@ function _Debug_toAnsiString(ansi, value)
 		return _Debug_ctorColor(ansi, tag) + output;
 	}
 
+	if (typeof DataView === 'function' && value instanceof DataView)
+	{
+		return _Debug_stringColor(ansi, '<' + value.byteLength + ' bytes>');
+	}
+
+	if (typeof File !== 'undefined' && value instanceof File)
+	{
+		return _Debug_internalColor(ansi, '<' + value.name + '>');
+	}
+
 	if (typeof value === 'object')
 	{
 		var output = [];
@@ -708,9 +718,13 @@ function _Debug_fadeColor(ansi, string)
 
 function _Debug_internalColor(ansi, string)
 {
-	return ansi ? '\x1b[94m' + string + '\x1b[0m' : string;
+	return ansi ? '\x1b[36m' + string + '\x1b[0m' : string;
 }
 
+function _Debug_toHexDigit(n)
+{
+	return String.fromCharCode(n < 10 ? 48 + n : 55 + n);
+}
 
 
 // CRASH
@@ -780,11 +794,11 @@ function _Debug_crash_UNUSED(identifier, fact1, fact2, fact3, fact4)
 
 function _Debug_regionToString(region)
 {
-	if (region.bd.aB === region.bu.aB)
+	if (region.bb.aB === region.bs.aB)
 	{
-		return 'on line ' + region.bd.aB;
+		return 'on line ' + region.bb.aB;
 	}
-	return 'on lines ' + region.bd.aB + ' through ' + region.bu.aB;
+	return 'on lines ' + region.bb.aB + ' through ' + region.bs.aB;
 }
 
 
@@ -869,9 +883,7 @@ function _Char_fromCode(code)
 			? String.fromCharCode(code)
 			:
 		(code -= 0x10000,
-			String.fromCharCode(Math.floor(code / 0x400) + 0xD800)
-			+
-			String.fromCharCode(code % 0x400 + 0xDC00)
+			String.fromCharCode(Math.floor(code / 0x400) + 0xD800, code % 0x400 + 0xDC00)
 		)
 	);
 }
@@ -906,7 +918,7 @@ var _String_cons = F2(function(chr, str)
 function _String_uncons(string)
 {
 	var word = string.charCodeAt(0);
-	return word
+	return !isNaN(word)
 		? elm$core$Maybe$Just(
 			0xD800 <= word && word <= 0xDBFF
 				? _Utils_Tuple2(_Utils_chr(string[0] + string[1]), string.slice(2))
@@ -1236,21 +1248,56 @@ function _Json_fail(msg)
 	};
 }
 
-var _Json_decodeInt = { $: 2 };
-var _Json_decodeBool = { $: 3 };
-var _Json_decodeFloat = { $: 4 };
-var _Json_decodeValue = { $: 5 };
-var _Json_decodeString = { $: 6 };
+function _Json_decodePrim(decoder)
+{
+	return { $: 2, b: decoder };
+}
 
-function _Json_decodeList(decoder) { return { $: 7, b: decoder }; }
-function _Json_decodeArray(decoder) { return { $: 8, b: decoder }; }
+var _Json_decodeInt = _Json_decodePrim(function(value) {
+	return (typeof value !== 'number')
+		? _Json_expecting('an INT', value)
+		:
+	(-2147483647 < value && value < 2147483647 && (value | 0) === value)
+		? elm$core$Result$Ok(value)
+		:
+	(isFinite(value) && !(value % 1))
+		? elm$core$Result$Ok(value)
+		: _Json_expecting('an INT', value);
+});
 
-function _Json_decodeNull(value) { return { $: 9, c: value }; }
+var _Json_decodeBool = _Json_decodePrim(function(value) {
+	return (typeof value === 'boolean')
+		? elm$core$Result$Ok(value)
+		: _Json_expecting('a BOOL', value);
+});
+
+var _Json_decodeFloat = _Json_decodePrim(function(value) {
+	return (typeof value === 'number')
+		? elm$core$Result$Ok(value)
+		: _Json_expecting('a FLOAT', value);
+});
+
+var _Json_decodeValue = _Json_decodePrim(function(value) {
+	return elm$core$Result$Ok(_Json_wrap(value));
+});
+
+var _Json_decodeString = _Json_decodePrim(function(value) {
+	return (typeof value === 'string')
+		? elm$core$Result$Ok(value)
+		: (value instanceof String)
+			? elm$core$Result$Ok(value + '')
+			: _Json_expecting('a STRING', value);
+});
+
+function _Json_decodeList(decoder) { return { $: 3, b: decoder }; }
+function _Json_decodeArray(decoder) { return { $: 4, b: decoder }; }
+
+function _Json_decodeNull(value) { return { $: 5, c: value }; }
 
 var _Json_decodeField = F2(function(field, decoder)
 {
 	return {
-		$: 10,
+		$: 6,
 		d: field,
 		b: decoder
 	};
@@ -1259,7 +1306,7 @@ var _Json_decodeField = F2(function(field, decoder)
 var _Json_decodeIndex = F2(function(index, decoder)
 {
 	return {
-		$: 11,
+		$: 7,
 		e: index,
 		b: decoder
 	};
@@ -1268,7 +1315,7 @@ var _Json_decodeIndex = F2(function(index, decoder)
 function _Json_decodeKeyValuePairs(decoder)
 {
 	return {
-		$: 12,
+		$: 8,
 		b: decoder
 	};
 }
@@ -1276,7 +1323,7 @@ function _Json_decodeKeyValuePairs(decoder)
 function _Json_mapMany(f, decoders)
 {
 	return {
-		$: 13,
+		$: 9,
 		f: f,
 		g: decoders
 	};
@@ -1285,7 +1332,7 @@ function _Json_mapMany(f, decoders)
 var _Json_andThen = F2(function(callback, decoder)
 {
 	return {
-		$: 14,
+		$: 10,
 		b: decoder,
 		h: callback
 	};
@@ -1294,7 +1341,7 @@ var _Json_andThen = F2(function(callback, decoder)
 function _Json_oneOf(decoders)
 {
 	return {
-		$: 15,
+		$: 11,
 		g: decoders
 	};
 }
@@ -1367,61 +1414,29 @@ function _Json_runHelp(decoder, value)
 {
 	switch (decoder.$)
 	{
-		case 3:
-			return (typeof value === 'boolean')
-				? elm$core$Result$Ok(value)
-				: _Json_expecting('a BOOL', value);
-
 		case 2:
-			if (typeof value !== 'number') {
-				return _Json_expecting('an INT', value);
-			}
+			return decoder.b(value);
 
-			if (-2147483647 < value && value < 2147483647 && (value | 0) === value) {
-				return elm$core$Result$Ok(value);
-			}
-
-			if (isFinite(value) && !(value % 1)) {
-				return elm$core$Result$Ok(value);
-			}
-
-			return _Json_expecting('an INT', value);
-
-		case 4:
-			return (typeof value === 'number')
-				? elm$core$Result$Ok(value)
-				: _Json_expecting('a FLOAT', value);
-
-		case 6:
-			return (typeof value === 'string')
-				? elm$core$Result$Ok(value)
-				: (value instanceof String)
-					? elm$core$Result$Ok(value + '')
-					: _Json_expecting('a STRING', value);
-
-		case 9:
+		case 5:
 			return (value === null)
 				? elm$core$Result$Ok(decoder.c)
 				: _Json_expecting('null', value);
 
-		case 5:
-			return elm$core$Result$Ok(_Json_wrap(value));
-
-		case 7:
-			if (!Array.isArray(value))
+		case 3:
+			if (!_Json_isArray(value))
 			{
 				return _Json_expecting('a LIST', value);
 			}
 			return _Json_runArrayDecoder(decoder.b, value, _List_fromArray);
 
-		case 8:
-			if (!Array.isArray(value))
+		case 4:
+			if (!_Json_isArray(value))
 			{
 				return _Json_expecting('an ARRAY', value);
 			}
 			return _Json_runArrayDecoder(decoder.b, value, _Json_toElmArray);
 
-		case 10:
+		case 6:
 			var field = decoder.d;
 			if (typeof value !== 'object' || value === null || !(field in value))
 			{
@@ -1430,9 +1445,9 @@ function _Json_runHelp(decoder, value)
 			var result = _Json_runHelp(decoder.b, value[field]);
 			return (elm$core$Result$isOk(result)) ? result : elm$core$Result$Err(A2(elm$json$Json$Decode$Field, field, result.a));
 
-		case 11:
+		case 7:
 			var index = decoder.e;
-			if (!Array.isArray(value))
+			if (!_Json_isArray(value))
 			{
 				return _Json_expecting('an ARRAY', value);
 			}
@@ -1443,8 +1458,8 @@ function _Json_runHelp(decoder, value)
 			var result = _Json_runHelp(decoder.b, value[index]);
 			return (elm$core$Result$isOk(result)) ? result : elm$core$Result$Err(A2(elm$json$Json$Decode$Index, index, result.a));
 
-		case 12:
-			if (typeof value !== 'object' || value === null || Array.isArray(value))
+		case 8:
+			if (typeof value !== 'object' || value === null || _Json_isArray(value))
 			{
 				return _Json_expecting('an OBJECT', value);
 			}
@@ -1465,7 +1480,7 @@ function _Json_runHelp(decoder, value)
 			}
 			return elm$core$Result$Ok(elm$core$List$reverse(keyValuePairs));
 
-		case 13:
+		case 9:
 			var answer = decoder.f;
 			var decoders = decoder.g;
 			for (var i = 0; i < decoders.length; i++)
@@ -1479,13 +1494,13 @@ function _Json_runHelp(decoder, value)
 			}
 			return elm$core$Result$Ok(answer);
 
-		case 14:
+		case 10:
 			var result = _Json_runHelp(decoder.b, value);
 			return (!elm$core$Result$isOk(result))
 				? result
 				: _Json_runHelp(decoder.h(result.a), value);
 
-		case 15:
+		case 11:
 			var errors = _List_Nil;
 			for (var temp = decoder.g; temp.b; temp = temp.b) // WHILE_CONS
 			{
@@ -1522,6 +1537,11 @@ function _Json_runArrayDecoder(decoder, value, toElmValue)
 	return elm$core$Result$Ok(toElmValue(array));
 }
 
+function _Json_isArray(value)
+{
+	return Array.isArray(value) || (typeof FileList !== 'undefined' && value instanceof FileList);
+}
+
 function _Json_toElmArray(array)
 {
 	return A2(elm$core$Array$initialize, array.length, function(i) { return array[i]; });
@@ -1553,34 +1573,30 @@ function _Json_equality(x, y)
 		case 1:
 			return x.a === y.a;
 
-		case 3:
 		case 2:
-		case 4:
-		case 6:
-		case 5:
-			return true;
+			return x.b === y.b;
 
-		case 9:
+		case 5:
 			return x.c === y.c;
 
-		case 7:
+		case 3:
+		case 4:
 		case 8:
-		case 12:
 			return _Json_equality(x.b, y.b);
 
-		case 10:
+		case 6:
 			return x.d === y.d && _Json_equality(x.b, y.b);
 
-		case 11:
+		case 7:
 			return x.e === y.e && _Json_equality(x.b, y.b);
 
-		case 13:
+		case 9:
 			return x.f === y.f && _Json_listEquality(x.g, y.g);
 
-		case 14:
+		case 10:
 			return x.h === y.h && _Json_equality(x.b, y.b);
 
-		case 15:
+		case 11:
 			return _Json_listEquality(x.g, y.g);
 	}
 }
@@ -1851,9 +1867,9 @@ var _Platform_worker = F4(function(impl, flagDecoder, debugMetadata, args)
 	return _Platform_initialize(
 		flagDecoder,
 		args,
-		impl.ce,
+		impl.ch,
+		impl.cx,
 		impl.cu,
-		impl.cr,
 		function() { return function() {} }
 	);
 });
@@ -1868,19 +1884,19 @@ function _Platform_initialize(flagDecoder, args, init, update, subscriptions, st
 	var result = A2(_Json_run, flagDecoder, _Json_wrap(args ? args['flags'] : undefined));
 	elm$core$Result$isOk(result) || _Debug_crash(2 /**_UNUSED/, _Json_errorToString(result.a) /**/);
 	var managers = {};
-	result = init(result.a);
-	var model = result.a;
+	var initPair = init(result.a);
+	var model = initPair.a;
 	var stepper = stepperBuilder(sendToApp, model);
 	var ports = _Platform_setupEffects(managers, sendToApp);
 
 	function sendToApp(msg, viewMetadata)
 	{
-		result = A2(update, msg, model);
-		stepper(model = result.a, viewMetadata);
-		_Platform_dispatchEffects(managers, result.b, subscriptions(model));
+		var pair = A2(update, msg, model);
+		stepper(model = pair.a, viewMetadata);
+		_Platform_enqueueEffects(managers, pair.b, subscriptions(model));
 	}
 
-	_Platform_dispatchEffects(managers, result.b, subscriptions(model));
+	_Platform_enqueueEffects(managers, initPair.b, subscriptions(model));
 
 	return ports ? { ports: ports } : {};
 }
@@ -2038,6 +2054,51 @@ var _Platform_map = F2(function(tagger, bag)
 
 
 // PIPE BAGS INTO EFFECT MANAGERS
+//
+// Effects must be queued!
+//
+// Say your init contains a synchronous command, like Time.now or Time.here
+//
+//   - This will produce a batch of effects (FX_1)
+//   - The synchronous task triggers the subsequent `update` call
+//   - This will produce a batch of effects (FX_2)
+//
+// If we just start dispatching FX_2, subscriptions from FX_2 can be processed
+// before subscriptions from FX_1. No good! Earlier versions of this code had
+// this problem, leading to these reports:
+//
+//   https://github.com/elm/core/issues/980
+//   https://github.com/elm/core/pull/981
+//   https://github.com/elm/compiler/issues/1776
+//
+// The queue is necessary to avoid ordering issues for synchronous commands.
+
+
+// Why use true/false here? Why not just check the length of the queue?
+// The goal is to detect "are we currently dispatching effects?" If we
+// are, we need to bail and let the ongoing while loop handle things.
+//
+// Now say the queue has 1 element. When we dequeue the final element,
+// the queue will be empty, but we are still actively dispatching effects.
+// So you could get queue jumping in a really tricky category of cases.
+//
+var _Platform_effectsQueue = [];
+var _Platform_effectsActive = false;
+
+
+function _Platform_enqueueEffects(managers, cmdBag, subBag)
+{
+	_Platform_effectsQueue.push({ p: managers, q: cmdBag, r: subBag });
+
+	if (_Platform_effectsActive) return;
+
+	_Platform_effectsActive = true;
+	for (var fx; fx = _Platform_effectsQueue.shift(); )
+	{
+		_Platform_dispatchEffects(fx.p, fx.q, fx.r);
+	}
+	_Platform_effectsActive = false;
+}
 
 
 function _Platform_dispatchEffects(managers, cmdBag, subBag)
@@ -2075,8 +2136,8 @@ function _Platform_gatherEffects(isCmd, bag, effectsDict, taggers)
 
 		case 3:
 			_Platform_gatherEffects(isCmd, bag.o, effectsDict, {
-				p: bag.n,
-				q: taggers
+				s: bag.n,
+				t: taggers
 			});
 			return;
 	}
@@ -2087,9 +2148,9 @@ function _Platform_toEffect(isCmd, home, taggers, value)
 {
 	function applyTaggers(x)
 	{
-		for (var temp = taggers; temp; temp = temp.q)
+		for (var temp = taggers; temp; temp = temp.t)
 		{
-			x = temp.p(x);
+			x = temp.s(x);
 		}
 		return x;
 	}
@@ -2136,7 +2197,7 @@ function _Platform_outgoingPort(name, converter)
 	_Platform_checkPortName(name);
 	_Platform_effectManagers[name] = {
 		e: _Platform_outgoingPortMap,
-		r: converter,
+		u: converter,
 		a: _Platform_setupOutgoingPort
 	};
 	return _Platform_leaf(name);
@@ -2149,7 +2210,7 @@ var _Platform_outgoingPortMap = F2(function(tagger, value) { return value; });
 function _Platform_setupOutgoingPort(name)
 {
 	var subs = [];
-	var converter = _Platform_effectManagers[name].r;
+	var converter = _Platform_effectManagers[name].u;
 
 	// CREATE MANAGER
 
@@ -2206,7 +2267,7 @@ function _Platform_incomingPort(name, converter)
 	_Platform_checkPortName(name);
 	_Platform_effectManagers[name] = {
 		f: _Platform_incomingPortMap,
-		r: converter,
+		u: converter,
 		a: _Platform_setupIncomingPort
 	};
 	return _Platform_leaf(name);
@@ -2225,7 +2286,7 @@ var _Platform_incomingPortMap = F2(function(tagger, finalTagger)
 function _Platform_setupIncomingPort(name, sendToApp)
 {
 	var subs = _List_Nil;
-	var converter = _Platform_effectManagers[name].r;
+	var converter = _Platform_effectManagers[name].u;
 
 	// CREATE MANAGER
 
@@ -2736,9 +2797,9 @@ var _VirtualDom_mapEventTuple = F2(function(func, tuple)
 var _VirtualDom_mapEventRecord = F2(function(func, record)
 {
 	return {
-		D: func(record.D),
-		be: record.be,
-		bc: record.bc
+		H: func(record.H),
+		bc: record.bc,
+		ba: record.ba
 	}
 });
 
@@ -3006,11 +3067,11 @@ function _VirtualDom_makeCallback(eventNode, initialHandler)
 		// 3 = Custom
 
 		var value = result.a;
-		var message = !tag ? value : tag < 3 ? value.a : value.D;
-		var stopPropagation = tag == 1 ? value.b : tag == 3 && value.be;
+		var message = !tag ? value : tag < 3 ? value.a : value.H;
+		var stopPropagation = tag == 1 ? value.b : tag == 3 && value.bc;
 		var currentEventNode = (
 			stopPropagation && event.stopPropagation(),
-			(tag == 2 ? value.b : tag == 3 && value.bc) && event.preventDefault(),
+			(tag == 2 ? value.b : tag == 3 && value.ba) && event.preventDefault(),
 			eventNode
 		);
 		var tagger;
@@ -3960,11 +4021,11 @@ var _Browser_element = _Debugger_element || F4(function(impl, flagDecoder, debug
 	return _Platform_initialize(
 		flagDecoder,
 		args,
-		impl.ce,
+		impl.ch,
+		impl.cx,
 		impl.cu,
-		impl.cr,
 		function(sendToApp, initialModel) {
-			var view = impl.cy;
+			var view = impl.cB;
 			/**/
 			var domNode = args['node'];
 			//*/
@@ -3996,12 +4057,12 @@ var _Browser_document = _Debugger_document || F4(function(impl, flagDecoder, deb
 	return _Platform_initialize(
 		flagDecoder,
 		args,
-		impl.ce,
+		impl.ch,
+		impl.cx,
 		impl.cu,
-		impl.cr,
 		function(sendToApp, initialModel) {
 			var divertHrefToApp = impl.aF && impl.aF(sendToApp)
-			var view = impl.cy;
+			var view = impl.cB;
 			var title = _VirtualDom_doc.title;
 			var bodyNode = _VirtualDom_doc.body;
 			var currNode = _VirtualDom_virtualize(bodyNode);
@@ -4009,12 +4070,12 @@ var _Browser_document = _Debugger_document || F4(function(impl, flagDecoder, deb
 			{
 				_VirtualDom_divertHrefToApp = divertHrefToApp;
 				var doc = view(model);
-				var nextNode = _VirtualDom_node('body')(_List_Nil)(doc.b1);
+				var nextNode = _VirtualDom_node('body')(_List_Nil)(doc.b3);
 				var patches = _VirtualDom_diff(currNode, nextNode);
 				bodyNode = _VirtualDom_applyPatches(bodyNode, currNode, patches, sendToApp);
 				currNode = nextNode;
 				_VirtualDom_divertHrefToApp = 0;
-				(title !== doc.ct) && (_VirtualDom_doc.title = title = doc.ct);
+				(title !== doc.cw) && (_VirtualDom_doc.title = title = doc.cw);
 			});
 		}
 	);
@@ -4070,8 +4131,8 @@ function _Browser_makeAnimator(model, draw)
 
 function _Browser_application(impl)
 {
-	var onUrlChange = impl.ck;
-	var onUrlRequest = impl.cl;
+	var onUrlChange = impl.cn;
+	var onUrlRequest = impl.co;
 	var key = function() { key.a(onUrlChange(_Browser_getUrl())); };
 
 	return _Browser_document({
@@ -4091,9 +4152,9 @@ function _Browser_application(impl)
 					var next = elm$url$Url$fromString(href).a;
 					sendToApp(onUrlRequest(
 						(next
-							&& curr.bM === next.bM
-							&& curr.by === next.by
-							&& curr.bJ.a === next.bJ.a
+							&& curr.bL === next.bL
+							&& curr.bx === next.bx
+							&& curr.bI.a === next.bI.a
 						)
 							? elm$browser$Browser$Internal(next)
 							: elm$browser$Browser$External(href)
@@ -4101,13 +4162,13 @@ function _Browser_application(impl)
 				}
 			});
 		},
-		ce: function(flags)
+		ch: function(flags)
 		{
-			return A3(impl.ce, flags, _Browser_getUrl(), key);
+			return A3(impl.ch, flags, _Browser_getUrl(), key);
 		},
-		cy: impl.cy,
-		cu: impl.cu,
-		cr: impl.cr
+		cB: impl.cB,
+		cx: impl.cx,
+		cu: impl.cu
 	});
 }
 
@@ -4173,17 +4234,17 @@ var _Browser_decodeEvent = F2(function(decoder, event)
 function _Browser_visibilityInfo()
 {
 	return (typeof _VirtualDom_doc.hidden !== 'undefined')
-		? { cb: 'hidden', b3: 'visibilitychange' }
+		? { ce: 'hidden', b5: 'visibilitychange' }
 		:
 	(typeof _VirtualDom_doc.mozHidden !== 'undefined')
-		? { cb: 'mozHidden', b3: 'mozvisibilitychange' }
+		? { ce: 'mozHidden', b5: 'mozvisibilitychange' }
 		:
 	(typeof _VirtualDom_doc.msHidden !== 'undefined')
-		? { cb: 'msHidden', b3: 'msvisibilitychange' }
+		? { ce: 'msHidden', b5: 'msvisibilitychange' }
 		:
 	(typeof _VirtualDom_doc.webkitHidden !== 'undefined')
-		? { cb: 'webkitHidden', b3: 'webkitvisibilitychange' }
-		: { cb: 'hidden', b3: 'visibilitychange' };
+		? { ce: 'webkitHidden', b5: 'webkitvisibilitychange' }
+		: { ce: 'hidden', b5: 'visibilitychange' };
 }
 
 
@@ -4264,12 +4325,12 @@ var _Browser_call = F2(function(functionName, id)
 function _Browser_getViewport()
 {
 	return {
-		bR: _Browser_getScene(),
-		bY: {
-			a0: _Browser_window.pageXOffset,
-			a1: _Browser_window.pageYOffset,
-			ao: _Browser_doc.documentElement.clientWidth,
-			aa: _Browser_doc.documentElement.clientHeight
+		bQ: _Browser_getScene(),
+		bX: {
+			bZ: _Browser_window.pageXOffset,
+			b_: _Browser_window.pageYOffset,
+			bY: _Browser_doc.documentElement.clientWidth,
+			bw: _Browser_doc.documentElement.clientHeight
 		}
 	};
 }
@@ -4279,8 +4340,8 @@ function _Browser_getScene()
 	var body = _Browser_doc.body;
 	var elem = _Browser_doc.documentElement;
 	return {
-		ao: Math.max(body.scrollWidth, body.offsetWidth, elem.scrollWidth, elem.offsetWidth, elem.clientWidth),
-		aa: Math.max(body.scrollHeight, body.offsetHeight, elem.scrollHeight, elem.offsetHeight, elem.clientHeight)
+		bY: Math.max(body.scrollWidth, body.offsetWidth, elem.scrollWidth, elem.offsetWidth, elem.clientWidth),
+		bw: Math.max(body.scrollHeight, body.offsetHeight, elem.scrollHeight, elem.offsetHeight, elem.clientHeight)
 	};
 }
 
@@ -4303,15 +4364,15 @@ function _Browser_getViewportOf(id)
 	return _Browser_withNode(id, function(node)
 	{
 		return {
-			bR: {
-				ao: node.scrollWidth,
-				aa: node.scrollHeight
+			bQ: {
+				bY: node.scrollWidth,
+				bw: node.scrollHeight
 			},
-			bY: {
-				a0: node.scrollLeft,
-				a1: node.scrollTop,
-				ao: node.clientWidth,
-				aa: node.clientHeight
+			bX: {
+				bZ: node.scrollLeft,
+				b_: node.scrollTop,
+				bY: node.clientWidth,
+				bw: node.clientHeight
 			}
 		};
 	});
@@ -4341,18 +4402,18 @@ function _Browser_getElement(id)
 		var x = _Browser_window.pageXOffset;
 		var y = _Browser_window.pageYOffset;
 		return {
-			bR: _Browser_getScene(),
-			bY: {
-				a0: x,
-				a1: y,
-				ao: _Browser_doc.documentElement.clientWidth,
-				aa: _Browser_doc.documentElement.clientHeight
+			bQ: _Browser_getScene(),
+			bX: {
+				bZ: x,
+				b_: y,
+				bY: _Browser_doc.documentElement.clientWidth,
+				bw: _Browser_doc.documentElement.clientHeight
 			},
-			b8: {
-				a0: x + rect.left,
-				a1: y + rect.top,
-				ao: rect.width,
-				aa: rect.height
+			cb: {
+				bZ: x + rect.left,
+				b_: y + rect.top,
+				bY: rect.width,
+				bw: rect.height
 			}
 		};
 	});
@@ -5121,8 +5182,8 @@ var elm$random$Random$generate = F2(
 	});
 var author$project$Typewriter$schedule = function (_n0) {
 	var mode = _n0.g;
-	var config = _n0.a3;
-	var delayCoeff = _n0.a4;
+	var config = _n0.a1;
+	var delayCoeff = _n0.a2;
 	var stepAfter = function (interval) {
 		return function (cmd) {
 			return elm$core$Platform$Cmd$batch(
@@ -5187,14 +5248,14 @@ var wernerdegroot$listzipper$List$Zipper$withDefault = function (x) {
 var author$project$Typewriter$init = function (_n0) {
 	var config = _n0;
 	var model = {
-		a3: config,
+		a1: config,
 		au: config.ay,
-		a4: 1,
+		a2: 1,
 		g: author$project$Typewriter$Typing(0),
-		l: A2(
+		m: A2(
 			wernerdegroot$listzipper$List$Zipper$withDefault,
 			'',
-			wernerdegroot$listzipper$List$Zipper$fromList(config.l))
+			wernerdegroot$listzipper$List$Zipper$fromList(config.m))
 	};
 	return _Utils_Tuple2(
 		model,
@@ -5238,7 +5299,7 @@ var author$project$Typewriter$withWords = function (words) {
 		ay: author$project$Typewriter$infinite,
 		az: A2(elm$random$Random$float, 0.8, 1.2),
 		a$: 100,
-		l: words
+		m: words
 	};
 };
 var elm$core$Platform$Cmd$map = _Platform_map;
@@ -5440,7 +5501,7 @@ var author$project$Examples$Main$init = function () {
 	var basic = _n4.a;
 	var basicCmd = _n4.b;
 	return _Utils_Tuple2(
-		{as: basic, av: delay, az: jitter, aH: times, ct: title},
+		{as: basic, av: delay, az: jitter, aH: times, cw: title},
 		elm$core$Platform$Cmd$batch(
 			_List_fromArray(
 				[
@@ -5512,7 +5573,7 @@ var author$project$Typewriter$nextStep = function (_n0) {
 			var count = _n1.a;
 			if (_Utils_cmp(
 				count,
-				author$project$Typewriter$currentWordLength(info.l)) < 0) {
+				author$project$Typewriter$currentWordLength(info.m)) < 0) {
 				return _Utils_update(
 					info,
 					{
@@ -5521,14 +5582,14 @@ var author$project$Typewriter$nextStep = function (_n0) {
 			} else {
 				var _n2 = _Utils_Tuple2(
 					info.au,
-					wernerdegroot$listzipper$List$Zipper$next(info.l));
+					wernerdegroot$listzipper$List$Zipper$next(info.m));
 				if (((_n2.a.$ === 1) && (_n2.a.a === 1)) && (_n2.b.$ === 1)) {
 					var _n3 = _n2.b;
 					return _Utils_update(
 						info,
 						{
 							g: author$project$Typewriter$Done(
-								wernerdegroot$listzipper$List$Zipper$current(info.l))
+								wernerdegroot$listzipper$List$Zipper$current(info.m))
 						});
 				} else {
 					return _Utils_update(
@@ -5546,7 +5607,7 @@ var author$project$Typewriter$nextStep = function (_n0) {
 			var count = _n1.a;
 			return (_Utils_cmp(
 				count,
-				author$project$Typewriter$currentWordLength(info.l)) < 0) ? _Utils_update(
+				author$project$Typewriter$currentWordLength(info.m)) < 0) ? _Utils_update(
 				info,
 				{
 					g: author$project$Typewriter$Deleting(count + 1)
@@ -5554,7 +5615,7 @@ var author$project$Typewriter$nextStep = function (_n0) {
 				info,
 				{g: author$project$Typewriter$Next});
 		case 3:
-			var _n4 = wernerdegroot$listzipper$List$Zipper$next(info.l);
+			var _n4 = wernerdegroot$listzipper$List$Zipper$next(info.m);
 			if (_n4.$ === 1) {
 				return _Utils_update(
 					info,
@@ -5569,7 +5630,7 @@ var author$project$Typewriter$nextStep = function (_n0) {
 							}
 						}(),
 						g: author$project$Typewriter$Typing(0),
-						l: wernerdegroot$listzipper$List$Zipper$first(info.l)
+						m: wernerdegroot$listzipper$List$Zipper$first(info.m)
 					});
 			} else {
 				var newWords = _n4.a;
@@ -5577,7 +5638,7 @@ var author$project$Typewriter$nextStep = function (_n0) {
 					info,
 					{
 						g: author$project$Typewriter$Typing(0),
-						l: newWords
+						m: newWords
 					});
 			}
 		case 4:
@@ -5598,7 +5659,7 @@ var author$project$Typewriter$update = F2(
 			return _Utils_Tuple2(
 				_Utils_update(
 					info,
-					{a4: coeff}),
+					{a2: coeff}),
 				elm$core$Platform$Cmd$none);
 		}
 	});
@@ -5631,9 +5692,9 @@ var author$project$Typewriter$restart = function (_n0) {
 	var model = _Utils_update(
 		info,
 		{
-			au: info.a3.ay,
+			au: info.a1.ay,
 			g: author$project$Typewriter$Typing(0),
-			l: wernerdegroot$listzipper$List$Zipper$first(info.l)
+			m: wernerdegroot$listzipper$List$Zipper$first(info.m)
 		});
 	return _Utils_Tuple2(
 		model,
@@ -5659,13 +5720,13 @@ var author$project$Examples$Main$update = F2(
 		switch (msg.$) {
 			case 0:
 				var typewriterMsg = msg.a;
-				var _n1 = A2(author$project$Typewriter$update, typewriterMsg, model.ct);
+				var _n1 = A2(author$project$Typewriter$update, typewriterMsg, model.cw);
 				var title = _n1.a;
 				var cmd = _n1.b;
 				return _Utils_Tuple2(
 					_Utils_update(
 						model,
-						{ct: title}),
+						{cw: title}),
 					A2(elm$core$Platform$Cmd$map, author$project$Examples$Main$TitleMsg, cmd));
 			case 1:
 				var basicMsg = msg.a;
@@ -5719,7 +5780,7 @@ var rtfeldman$elm_css$Css$property = F2(
 	});
 var rtfeldman$elm_css$Css$prop1 = F2(
 	function (key, arg) {
-		return A2(rtfeldman$elm_css$Css$property, key, arg.cx);
+		return A2(rtfeldman$elm_css$Css$property, key, arg.cA);
 	});
 var rtfeldman$elm_css$Css$borderRadius = rtfeldman$elm_css$Css$prop1('border-radius');
 var rtfeldman$elm_css$Css$PxUnits = 0;
@@ -5728,23 +5789,23 @@ var rtfeldman$elm_css$Css$Structure$Compatible = 0;
 var rtfeldman$elm_css$Css$Internal$lengthConverter = F3(
 	function (units, unitLabel, numericValue) {
 		return {
-			bg: 0,
-			bp: 0,
-			X: 0,
-			m: 0,
+			be: 0,
+			bn: 0,
+			aa: 0,
+			n: 0,
 			aA: 0,
-			ab: 0,
-			C: 0,
-			ac: 0,
-			ad: 0,
-			K: 0,
-			L: 0,
-			v: 0,
-			F: numericValue,
-			ak: 0,
-			am: unitLabel,
+			ae: 0,
+			G: 0,
+			af: 0,
+			ag: 0,
+			O: 0,
+			P: 0,
+			z: 0,
+			I: numericValue,
+			al: 0,
+			an: unitLabel,
 			aL: units,
-			cx: _Utils_ap(
+			cA: _Utils_ap(
 				elm$core$String$fromFloat(numericValue),
 				unitLabel)
 		};
@@ -5774,10 +5835,10 @@ var rtfeldman$elm_css$Css$erroneousHex = function (str) {
 	return {
 		aq: 1,
 		at: 0,
-		u: 0,
+		y: 0,
 		ax: 0,
 		aE: 0,
-		cx: rtfeldman$elm_css$Css$withPrecedingHash(str)
+		cA: rtfeldman$elm_css$Css$withPrecedingHash(str)
 	};
 };
 var elm$core$Basics$composeR = F3(
@@ -6047,10 +6108,10 @@ var rtfeldman$elm_css$Css$validHex = F5(
 			return {
 				aq: alpha / 255,
 				at: blue,
-				u: 0,
+				y: 0,
 				ax: green,
 				aE: red,
-				cx: rtfeldman$elm_css$Css$withPrecedingHash(str)
+				cA: rtfeldman$elm_css$Css$withPrecedingHash(str)
 			};
 		} else {
 			return rtfeldman$elm_css$Css$erroneousHex(str);
@@ -6153,7 +6214,7 @@ var rtfeldman$elm_css$Css$hex = function (str) {
 };
 var author$project$Theme$lighter = rtfeldman$elm_css$Css$hex('62615D');
 var rtfeldman$elm_css$Css$backgroundColor = function (c) {
-	return A2(rtfeldman$elm_css$Css$property, 'background-color', c.cx);
+	return A2(rtfeldman$elm_css$Css$property, 'background-color', c.cA);
 };
 var rtfeldman$elm_css$Css$prop3 = F4(
 	function (key, argA, argB, argC) {
@@ -6164,11 +6225,11 @@ var rtfeldman$elm_css$Css$prop3 = F4(
 				elm$core$String$join,
 				' ',
 				_List_fromArray(
-					[argA.cx, argB.cx, argC.cx])));
+					[argA.cA, argB.cA, argC.cA])));
 	});
 var rtfeldman$elm_css$Css$border3 = rtfeldman$elm_css$Css$prop3('border');
 var rtfeldman$elm_css$Css$color = function (c) {
-	return A2(rtfeldman$elm_css$Css$property, 'color', c.cx);
+	return A2(rtfeldman$elm_css$Css$property, 'color', c.cA);
 };
 var rtfeldman$elm_css$Css$Preprocess$ExtendSelector = F2(
 	function (a, b) {
@@ -6185,21 +6246,21 @@ var rtfeldman$elm_css$Css$disabled = rtfeldman$elm_css$Css$pseudoClass('disabled
 var rtfeldman$elm_css$Css$fontFamily = rtfeldman$elm_css$Css$prop1('font-family');
 var rtfeldman$elm_css$Css$fontSize = rtfeldman$elm_css$Css$prop1('font-size');
 var rtfeldman$elm_css$Css$Internal$IncompatibleUnits = 0;
-var rtfeldman$elm_css$Css$initial = {bi: 0, bj: 0, ar: 0, bk: 0, S: 0, bl: 0, T: 0, y: 0, o: 0, aP: 0, u: 0, a: 0, f: 0, X: 0, a6: 0, aw: 0, aQ: 0, I: 0, m: 0, Y: 0, d: 0, B: 0, aR: 0, bC: 0, a7: 0, aA: 0, ab: 0, C: 0, ac: 0, ad: 0, K: 0, L: 0, v: 0, aS: 0, c: 0, b: 0, a9: 0, aC: 0, F: 0, aV: 0, ae: 0, s: 0, aZ: 0, aj: 0, P: 0, ak: 0, al: 0, Q: 0, q: 0, am: '', aL: 0, cx: 'initial', aM: 0, H: 0};
+var rtfeldman$elm_css$Css$initial = {bg: 0, bh: 0, ar: 0, bi: 0, W: 0, bj: 0, X: 0, C: 0, p: 0, aP: 0, y: 0, a: 0, f: 0, aa: 0, a4: 0, aw: 0, aQ: 0, M: 0, n: 0, ab: 0, d: 0, F: 0, aR: 0, bB: 0, a5: 0, aA: 0, ae: 0, G: 0, af: 0, ag: 0, O: 0, P: 0, z: 0, aS: 0, c: 0, b: 0, a7: 0, aC: 0, I: 0, aV: 0, ah: 0, w: 0, aZ: 0, ak: 0, T: 0, al: 0, am: 0, U: 0, s: 0, an: '', aL: 0, cA: 'initial', aM: 0, L: 0};
 var rtfeldman$elm_css$Css$inherit = _Utils_update(
 	rtfeldman$elm_css$Css$initial,
-	{cx: 'inherit'});
+	{cA: 'inherit'});
 var rtfeldman$elm_css$Css$UnitlessFloat = 0;
 var rtfeldman$elm_css$Css$num = function (val) {
 	return {
-		L: 0,
-		v: 0,
+		P: 0,
+		z: 0,
 		aC: 0,
 		aT: 0,
-		F: val,
-		am: '',
+		I: val,
+		an: '',
 		aL: 0,
-		cx: elm$core$String$fromFloat(val)
+		cA: elm$core$String$fromFloat(val)
 	};
 };
 var rtfeldman$elm_css$Css$opacity = rtfeldman$elm_css$Css$prop1('opacity');
@@ -6212,10 +6273,10 @@ var rtfeldman$elm_css$Css$prop2 = F3(
 				elm$core$String$join,
 				' ',
 				_List_fromArray(
-					[argA.cx, argB.cx])));
+					[argA.cA, argB.cA])));
 	});
 var rtfeldman$elm_css$Css$padding2 = rtfeldman$elm_css$Css$prop2('padding');
-var rtfeldman$elm_css$Css$solid = {o: 0, P: 0, cx: 'solid'};
+var rtfeldman$elm_css$Css$solid = {p: 0, T: 0, cA: 'solid'};
 var rtfeldman$elm_css$VirtualDom$Styled$Node = F3(
 	function (a, b, c) {
 		return {$: 0, a: a, b: b, c: c};
@@ -6250,77 +6311,6 @@ var rtfeldman$elm_css$VirtualDom$Styled$Attribute = F3(
 	function (a, b, c) {
 		return {$: 0, a: a, b: b, c: c};
 	});
-var Skinney$murmur3$Murmur3$HashData = F4(
-	function (shift, seed, hash, charsProcessed) {
-		return {U: charsProcessed, _: hash, O: seed, ah: shift};
-	});
-var Skinney$murmur3$Murmur3$c1 = 3432918353;
-var Skinney$murmur3$Murmur3$c2 = 461845907;
-var elm$core$Bitwise$shiftLeftBy = _Bitwise_shiftLeftBy;
-var Skinney$murmur3$Murmur3$multiplyBy = F2(
-	function (b, a) {
-		return ((a & 65535) * b) + ((((a >>> 16) * b) & 65535) << 16);
-	});
-var elm$core$Bitwise$or = _Bitwise_or;
-var Skinney$murmur3$Murmur3$rotlBy = F2(
-	function (b, a) {
-		return (a << b) | (a >>> (32 - b));
-	});
-var elm$core$Basics$neq = _Utils_notEqual;
-var Skinney$murmur3$Murmur3$finalize = function (data) {
-	var acc = data._ ? (data.O ^ A2(
-		Skinney$murmur3$Murmur3$multiplyBy,
-		Skinney$murmur3$Murmur3$c2,
-		A2(
-			Skinney$murmur3$Murmur3$rotlBy,
-			15,
-			A2(Skinney$murmur3$Murmur3$multiplyBy, Skinney$murmur3$Murmur3$c1, data._)))) : data.O;
-	var h0 = acc ^ data.U;
-	var h1 = A2(Skinney$murmur3$Murmur3$multiplyBy, 2246822507, h0 ^ (h0 >>> 16));
-	var h2 = A2(Skinney$murmur3$Murmur3$multiplyBy, 3266489909, h1 ^ (h1 >>> 13));
-	return (h2 ^ (h2 >>> 16)) >>> 0;
-};
-var Skinney$murmur3$Murmur3$mix = F2(
-	function (h1, k1) {
-		return A2(
-			Skinney$murmur3$Murmur3$multiplyBy,
-			5,
-			A2(
-				Skinney$murmur3$Murmur3$rotlBy,
-				13,
-				h1 ^ A2(
-					Skinney$murmur3$Murmur3$multiplyBy,
-					Skinney$murmur3$Murmur3$c2,
-					A2(
-						Skinney$murmur3$Murmur3$rotlBy,
-						15,
-						A2(Skinney$murmur3$Murmur3$multiplyBy, Skinney$murmur3$Murmur3$c1, k1))))) + 3864292196;
-	});
-var Skinney$murmur3$Murmur3$hashFold = F2(
-	function (c, data) {
-		var res = data._ | ((255 & elm$core$Char$toCode(c)) << data.ah);
-		var _n0 = data.ah;
-		if (_n0 === 24) {
-			return {
-				U: data.U + 1,
-				_: 0,
-				O: A2(Skinney$murmur3$Murmur3$mix, data.O, res),
-				ah: 0
-			};
-		} else {
-			return {U: data.U + 1, _: res, O: data.O, ah: data.ah + 8};
-		}
-	});
-var elm$core$String$foldl = _String_foldl;
-var Skinney$murmur3$Murmur3$hashString = F2(
-	function (seed, str) {
-		return Skinney$murmur3$Murmur3$finalize(
-			A3(
-				elm$core$String$foldl,
-				Skinney$murmur3$Murmur3$hashFold,
-				A4(Skinney$murmur3$Murmur3$HashData, 0, seed, 0, 0),
-				str));
-	});
 var elm$core$List$isEmpty = function (xs) {
 	if (!xs.b) {
 		return true;
@@ -6333,7 +6323,7 @@ var elm$core$List$singleton = function (value) {
 		[value]);
 };
 var rtfeldman$elm_css$Css$Preprocess$stylesheet = function (snippets) {
-	return {br: elm$core$Maybe$Nothing, bz: _List_Nil, bF: _List_Nil, bS: snippets};
+	return {bp: elm$core$Maybe$Nothing, by: _List_Nil, bE: _List_Nil, bR: snippets};
 };
 var elm$core$List$append = F2(
 	function (xs, ys) {
@@ -6355,6 +6345,7 @@ var rtfeldman$elm_css$Css$Preprocess$unwrapSnippet = function (_n0) {
 	var declarations = _n0;
 	return declarations;
 };
+var elm$core$Basics$neq = _Utils_notEqual;
 var elm$core$List$head = function (list) {
 	if (list.b) {
 		var x = list.a;
@@ -7035,6 +7026,76 @@ var rtfeldman$elm_css$Css$Structure$styleBlockToMediaRule = F2(
 			return declaration;
 		}
 	});
+var elm$core$String$foldl = _String_foldl;
+var rtfeldman$elm_css$ElmCssVendor$Murmur3$HashData = F4(
+	function (shift, seed, hash, charsProcessed) {
+		return {Y: charsProcessed, ad: hash, S: seed, ai: shift};
+	});
+var rtfeldman$elm_css$ElmCssVendor$Murmur3$c1 = 3432918353;
+var rtfeldman$elm_css$ElmCssVendor$Murmur3$c2 = 461845907;
+var elm$core$Bitwise$shiftLeftBy = _Bitwise_shiftLeftBy;
+var rtfeldman$elm_css$ElmCssVendor$Murmur3$multiplyBy = F2(
+	function (b, a) {
+		return ((a & 65535) * b) + ((((a >>> 16) * b) & 65535) << 16);
+	});
+var elm$core$Bitwise$or = _Bitwise_or;
+var rtfeldman$elm_css$ElmCssVendor$Murmur3$rotlBy = F2(
+	function (b, a) {
+		return (a << b) | (a >>> (32 - b));
+	});
+var rtfeldman$elm_css$ElmCssVendor$Murmur3$finalize = function (data) {
+	var acc = data.ad ? (data.S ^ A2(
+		rtfeldman$elm_css$ElmCssVendor$Murmur3$multiplyBy,
+		rtfeldman$elm_css$ElmCssVendor$Murmur3$c2,
+		A2(
+			rtfeldman$elm_css$ElmCssVendor$Murmur3$rotlBy,
+			15,
+			A2(rtfeldman$elm_css$ElmCssVendor$Murmur3$multiplyBy, rtfeldman$elm_css$ElmCssVendor$Murmur3$c1, data.ad)))) : data.S;
+	var h0 = acc ^ data.Y;
+	var h1 = A2(rtfeldman$elm_css$ElmCssVendor$Murmur3$multiplyBy, 2246822507, h0 ^ (h0 >>> 16));
+	var h2 = A2(rtfeldman$elm_css$ElmCssVendor$Murmur3$multiplyBy, 3266489909, h1 ^ (h1 >>> 13));
+	return (h2 ^ (h2 >>> 16)) >>> 0;
+};
+var rtfeldman$elm_css$ElmCssVendor$Murmur3$mix = F2(
+	function (h1, k1) {
+		return A2(
+			rtfeldman$elm_css$ElmCssVendor$Murmur3$multiplyBy,
+			5,
+			A2(
+				rtfeldman$elm_css$ElmCssVendor$Murmur3$rotlBy,
+				13,
+				h1 ^ A2(
+					rtfeldman$elm_css$ElmCssVendor$Murmur3$multiplyBy,
+					rtfeldman$elm_css$ElmCssVendor$Murmur3$c2,
+					A2(
+						rtfeldman$elm_css$ElmCssVendor$Murmur3$rotlBy,
+						15,
+						A2(rtfeldman$elm_css$ElmCssVendor$Murmur3$multiplyBy, rtfeldman$elm_css$ElmCssVendor$Murmur3$c1, k1))))) + 3864292196;
+	});
+var rtfeldman$elm_css$ElmCssVendor$Murmur3$hashFold = F2(
+	function (c, data) {
+		var res = data.ad | ((255 & elm$core$Char$toCode(c)) << data.ai);
+		var _n0 = data.ai;
+		if (_n0 === 24) {
+			return {
+				Y: data.Y + 1,
+				ad: 0,
+				S: A2(rtfeldman$elm_css$ElmCssVendor$Murmur3$mix, data.S, res),
+				ai: 0
+			};
+		} else {
+			return {Y: data.Y + 1, ad: res, S: data.S, ai: data.ai + 8};
+		}
+	});
+var rtfeldman$elm_css$ElmCssVendor$Murmur3$hashString = F2(
+	function (seed, str) {
+		return rtfeldman$elm_css$ElmCssVendor$Murmur3$finalize(
+			A3(
+				elm$core$String$foldl,
+				rtfeldman$elm_css$ElmCssVendor$Murmur3$hashFold,
+				A4(rtfeldman$elm_css$ElmCssVendor$Murmur3$HashData, 0, seed, 0, 0),
+				str));
+	});
 var rtfeldman$elm_css$Hash$murmurSeed = 15739;
 var elm$core$Basics$modBy = _Basics_modBy;
 var rtfeldman$elm_hex$Hex$unsafeToDigit = function (num) {
@@ -7114,7 +7175,7 @@ var rtfeldman$elm_css$Hash$fromString = function (str) {
 		elm$core$String$cons,
 		'_',
 		rtfeldman$elm_hex$Hex$toString(
-			A2(Skinney$murmur3$Murmur3$hashString, rtfeldman$elm_css$Hash$murmurSeed, str)));
+			A2(rtfeldman$elm_css$ElmCssVendor$Murmur3$hashString, rtfeldman$elm_css$Hash$murmurSeed, str)));
 };
 var rtfeldman$elm_css$Css$Preprocess$Resolve$applyNestedStylesToLast = F4(
 	function (nestedStyles, rest, f, declarations) {
@@ -7338,7 +7399,7 @@ var rtfeldman$elm_css$Css$Preprocess$Resolve$applyStyles = F2(
 						_List_fromArray(
 							[
 								rtfeldman$elm_css$Css$Structure$Keyframes(
-								{b5: str, ci: name})
+								{b7: str, cl: name})
 							]));
 				case 4:
 					var _n12 = styles.a;
@@ -7473,13 +7534,13 @@ var rtfeldman$elm_css$Css$Preprocess$Resolve$toDeclarations = function (snippetD
 	}
 };
 var rtfeldman$elm_css$Css$Preprocess$Resolve$toStructure = function (_n0) {
-	var charset = _n0.br;
-	var imports = _n0.bz;
-	var namespaces = _n0.bF;
-	var snippets = _n0.bS;
+	var charset = _n0.bp;
+	var imports = _n0.by;
+	var namespaces = _n0.bE;
+	var snippets = _n0.bR;
 	var declarations = rtfeldman$elm_css$Css$Preprocess$Resolve$extract(
 		A2(elm$core$List$concatMap, rtfeldman$elm_css$Css$Preprocess$unwrapSnippet, snippets));
-	return {br: charset, b6: declarations, bz: imports, bF: namespaces};
+	return {bp: charset, b8: declarations, by: imports, bE: namespaces};
 };
 var elm$core$Dict$RBEmpty_elm_builtin = {$: -2};
 var elm$core$Dict$empty = elm$core$Dict$RBEmpty_elm_builtin;
@@ -7664,8 +7725,8 @@ var rtfeldman$elm_css$Css$Structure$compactHelp = F2(
 					A2(elm$core$List$cons, declaration, declarations));
 			case 6:
 				var record = declaration.a;
-				return elm$core$String$isEmpty(record.b5) ? _Utils_Tuple2(keyframesByName, declarations) : _Utils_Tuple2(
-					A3(elm$core$Dict$insert, record.ci, record.b5, keyframesByName),
+				return elm$core$String$isEmpty(record.b7) ? _Utils_Tuple2(keyframesByName, declarations) : _Utils_Tuple2(
+					A3(elm$core$Dict$insert, record.cl, record.b7, keyframesByName),
 					declarations);
 			case 7:
 				var properties = declaration.a;
@@ -7700,16 +7761,16 @@ var rtfeldman$elm_css$Css$Structure$withKeyframeDeclarations = F2(
 					var name = _n0.a;
 					var decl = _n0.b;
 					return rtfeldman$elm_css$Css$Structure$Keyframes(
-						{b5: decl, ci: name});
+						{b7: decl, cl: name});
 				},
 				elm$core$Dict$toList(keyframesByName)),
 			compactedDeclarations);
 	});
 var rtfeldman$elm_css$Css$Structure$compactStylesheet = function (_n0) {
-	var charset = _n0.br;
-	var imports = _n0.bz;
-	var namespaces = _n0.bF;
-	var declarations = _n0.b6;
+	var charset = _n0.bp;
+	var imports = _n0.by;
+	var namespaces = _n0.bE;
+	var declarations = _n0.b8;
 	var _n1 = A3(
 		elm$core$List$foldr,
 		rtfeldman$elm_css$Css$Structure$compactHelp,
@@ -7718,7 +7779,7 @@ var rtfeldman$elm_css$Css$Structure$compactStylesheet = function (_n0) {
 	var keyframesByName = _n1.a;
 	var compactedDeclarations = _n1.b;
 	var finalDeclarations = A2(rtfeldman$elm_css$Css$Structure$withKeyframeDeclarations, keyframesByName, compactedDeclarations);
-	return {br: charset, b6: finalDeclarations, bz: imports, bF: namespaces};
+	return {bp: charset, b8: finalDeclarations, by: imports, bE: namespaces};
 };
 var elm$core$List$filter = F2(
 	function (isGood, list) {
@@ -7743,13 +7804,13 @@ var rtfeldman$elm_css$Css$Structure$Output$charsetToString = function (charset) 
 			charset));
 };
 var rtfeldman$elm_css$Css$Structure$Output$mediaExpressionToString = function (expression) {
-	return '(' + (expression.bw + (A2(
+	return '(' + (expression.bu + (A2(
 		elm$core$Maybe$withDefault,
 		'',
 		A2(
 			elm$core$Maybe$map,
 			elm$core$Basics$append(': '),
-			expression.cx)) + ')'));
+			expression.cA)) + ')'));
 };
 var rtfeldman$elm_css$Css$Structure$Output$mediaTypeToString = function (mediaType) {
 	switch (mediaType) {
@@ -7991,8 +8052,8 @@ var rtfeldman$elm_css$Css$Structure$Output$prettyPrintDeclaration = function (de
 		case 5:
 			return 'TODO';
 		case 6:
-			var name = decl.a.ci;
-			var declaration = decl.a.b5;
+			var name = decl.a.cl;
+			var declaration = decl.a.b7;
 			return '@keyframes ' + (name + (' {\n' + (declaration + '\n}')));
 		case 7:
 			return 'TODO';
@@ -8003,10 +8064,10 @@ var rtfeldman$elm_css$Css$Structure$Output$prettyPrintDeclaration = function (de
 	}
 };
 var rtfeldman$elm_css$Css$Structure$Output$prettyPrint = function (_n0) {
-	var charset = _n0.br;
-	var imports = _n0.bz;
-	var namespaces = _n0.bF;
-	var declarations = _n0.b6;
+	var charset = _n0.bp;
+	var imports = _n0.by;
+	var namespaces = _n0.bE;
+	var declarations = _n0.b8;
 	return A2(
 		elm$core$String$join,
 		'\n\n',
@@ -8065,7 +8126,7 @@ var rtfeldman$elm_css$VirtualDom$Styled$getClassname = function (styles) {
 		'_',
 		rtfeldman$elm_hex$Hex$toString(
 			A2(
-				Skinney$murmur3$Murmur3$hashString,
+				rtfeldman$elm_css$ElmCssVendor$Murmur3$hashString,
 				rtfeldman$elm_css$VirtualDom$Styled$murmurSeed,
 				rtfeldman$elm_css$Css$Preprocess$Resolve$compile(
 					elm$core$List$singleton(
@@ -8175,17 +8236,17 @@ var author$project$Layout$viewButton = function (config) {
 			]),
 		_List_fromArray(
 			[
-				rtfeldman$elm_css$Html$Styled$Events$onClick(config.cj),
-				rtfeldman$elm_css$Html$Styled$Attributes$disabled(config.b7)
+				rtfeldman$elm_css$Html$Styled$Events$onClick(config.cm),
+				rtfeldman$elm_css$Html$Styled$Attributes$disabled(config.b9)
 			]),
 		_List_fromArray(
 			[
-				rtfeldman$elm_css$Html$Styled$text(config.cg)
+				rtfeldman$elm_css$Html$Styled$text(config.cj)
 			]));
 };
 var author$project$Theme$secondary = rtfeldman$elm_css$Css$hex('F5F0E6');
-var rtfeldman$elm_css$Css$ellipsis = {bV: 0, cx: 'ellipsis'};
-var rtfeldman$elm_css$Css$hidden = {o: 0, ae: 0, cx: 'hidden', aM: 0};
+var rtfeldman$elm_css$Css$ellipsis = {bU: 0, cA: 'ellipsis'};
+var rtfeldman$elm_css$Css$hidden = {p: 0, ah: 0, cA: 'hidden', aM: 0};
 var rtfeldman$elm_css$Css$prop4 = F5(
 	function (key, argA, argB, argC, argD) {
 		return A2(
@@ -8195,14 +8256,14 @@ var rtfeldman$elm_css$Css$prop4 = F5(
 				elm$core$String$join,
 				' ',
 				_List_fromArray(
-					[argA.cx, argB.cx, argC.cx, argD.cx])));
+					[argA.cA, argB.cA, argC.cA, argD.cA])));
 	});
 var rtfeldman$elm_css$Css$margin4 = rtfeldman$elm_css$Css$prop4('margin');
 var rtfeldman$elm_css$Css$marginBottom = rtfeldman$elm_css$Css$prop1('margin-bottom');
 var rtfeldman$elm_css$Css$overflow = rtfeldman$elm_css$Css$prop1('overflow');
 var rtfeldman$elm_css$Css$textOverflow = rtfeldman$elm_css$Css$prop1('text-overflow');
 var rtfeldman$elm_css$Css$UnitlessInteger = 0;
-var rtfeldman$elm_css$Css$zero = {aA: 0, ab: 0, C: 0, ac: 0, ad: 0, K: 0, L: 0, aC: 0, F: 0, aV: 0, am: '', aL: 0, cx: '0'};
+var rtfeldman$elm_css$Css$zero = {aA: 0, ae: 0, G: 0, af: 0, ag: 0, O: 0, P: 0, aC: 0, I: 0, aV: 0, an: '', aL: 0, cA: '0'};
 var rtfeldman$elm_css$Html$Styled$code = rtfeldman$elm_css$Html$Styled$node('code');
 var rtfeldman$elm_css$Html$Styled$div = rtfeldman$elm_css$Html$Styled$node('div');
 var rtfeldman$elm_css$Html$Styled$h2 = rtfeldman$elm_css$Html$Styled$node('h2');
@@ -8231,7 +8292,7 @@ var author$project$Layout$example = function (config) {
 				_List_Nil,
 				_List_fromArray(
 					[
-						rtfeldman$elm_css$Html$Styled$text(config.ct)
+						rtfeldman$elm_css$Html$Styled$text(config.cw)
 					])),
 				A4(
 				rtfeldman$elm_css$Html$Styled$styled,
@@ -8249,7 +8310,7 @@ var author$project$Layout$example = function (config) {
 				_List_Nil,
 				_List_fromArray(
 					[
-						rtfeldman$elm_css$Html$Styled$text('>> ' + config.cs)
+						rtfeldman$elm_css$Html$Styled$text('>> ' + config.cv)
 					])),
 				A4(
 				rtfeldman$elm_css$Html$Styled$styled,
@@ -8264,7 +8325,7 @@ var author$project$Layout$example = function (config) {
 						rtfeldman$elm_css$Css$zero)
 					]),
 				_List_Nil,
-				A2(elm$core$List$map, author$project$Layout$viewButton, config.b2)),
+				A2(elm$core$List$map, author$project$Layout$viewButton, config.b4)),
 				A4(
 				rtfeldman$elm_css$Html$Styled$styled,
 				rtfeldman$elm_css$Html$Styled$pre,
@@ -8282,7 +8343,7 @@ var author$project$Layout$example = function (config) {
 						_List_Nil,
 						_List_fromArray(
 							[
-								rtfeldman$elm_css$Html$Styled$text(config.b4)
+								rtfeldman$elm_css$Html$Styled$text(config.b6)
 							]))
 					]))
 			]));
@@ -8298,7 +8359,7 @@ var elm$core$String$left = F2(
 var author$project$Typewriter$view = function (_n0) {
 	var info = _n0;
 	var mode = info.g;
-	var words = info.l;
+	var words = info.m;
 	switch (mode.$) {
 		case 0:
 			var count = mode.a;
@@ -8330,30 +8391,30 @@ var author$project$Typewriter$view = function (_n0) {
 var author$project$Examples$Basic$view = function (model) {
 	return author$project$Layout$example(
 		{
-			b2: _List_Nil,
-			b4: author$project$Examples$Basic$code,
-			cs: author$project$Typewriter$view(model),
-			ct: 'Basic'
+			b4: _List_Nil,
+			b6: author$project$Examples$Basic$code,
+			cv: author$project$Typewriter$view(model),
+			cw: 'Basic'
 		});
 };
 var author$project$Examples$Delay$code = '\n    Typewriter.withWords [ "supercalifragilisticexpialidocious" ]\n        |> Tyepwriter.withTypeDelay 600\n        |> Typewriter.withBackspaceDelay 10\n        |> Typewriter.init\n    ';
 var author$project$Examples$Delay$view = function (model) {
 	return author$project$Layout$example(
 		{
-			b2: _List_Nil,
-			b4: author$project$Examples$Delay$code,
-			cs: author$project$Typewriter$view(model),
-			ct: 'Slow It Down'
+			b4: _List_Nil,
+			b6: author$project$Examples$Delay$code,
+			cv: author$project$Typewriter$view(model),
+			cw: 'Slow It Down'
 		});
 };
 var author$project$Examples$Jitter$code = '\n    Typewriter.withWords [ "Maybe I drank too much soda this morning..." ]\n        |> Typewriter.withJitter\n            (Random.Extra.frequency\n                ( 10, Random.constant 1 )\n                [ ( 1, Random.constant 15 ) ]\n            )\n        |> Typewriter.init\n    ';
 var author$project$Examples$Jitter$view = function (model) {
 	return author$project$Layout$example(
 		{
-			b2: _List_Nil,
-			b4: author$project$Examples$Jitter$code,
-			cs: author$project$Typewriter$view(model),
-			ct: 'Hiccups'
+			b4: _List_Nil,
+			b6: author$project$Examples$Jitter$code,
+			cv: author$project$Typewriter$view(model),
+			cw: 'Hiccups'
 		});
 };
 var author$project$Theme$accent = rtfeldman$elm_css$Css$hex('FF5050');
@@ -8433,7 +8494,7 @@ var rtfeldman$elm_css$Css$textAlign = function (fn) {
 var rtfeldman$elm_css$Html$Styled$em = rtfeldman$elm_css$Html$Styled$node('em');
 var rtfeldman$elm_css$Html$Styled$h1 = rtfeldman$elm_css$Html$Styled$node('h1');
 var author$project$Examples$Main$viewTitle = function (_n0) {
-	var title = _n0.ct;
+	var title = _n0.cw;
 	return A4(
 		rtfeldman$elm_css$Html$Styled$styled,
 		rtfeldman$elm_css$Html$Styled$h1,
@@ -8498,23 +8559,23 @@ var author$project$Typewriter$isDone = function (_n0) {
 var author$project$Examples$Times$view = function (model) {
 	return author$project$Layout$example(
 		{
-			b2: _List_fromArray(
+			b4: _List_fromArray(
 				[
 					{
-					b7: !author$project$Typewriter$isDone(model),
-					cg: 'Replay',
-					cj: author$project$Examples$Times$Replay
+					b9: !author$project$Typewriter$isDone(model),
+					cj: 'Replay',
+					cm: author$project$Examples$Times$Replay
 				}
 				]),
-			b4: author$project$Examples$Times$code,
-			cs: author$project$Typewriter$view(model),
-			ct: 'Just a Few'
+			b6: author$project$Examples$Times$code,
+			cv: author$project$Typewriter$view(model),
+			cw: 'Just a Few'
 		});
 };
-var rtfeldman$elm_css$Css$auto = {b_: 0, a: 0, X: 0, aR: 0, cf: 0, ab: 0, C: 0, v: 0, ae: 0, s: 0, aZ: 0, al: 0, q: 0, cx: 'auto'};
+var rtfeldman$elm_css$Css$auto = {b0: 0, a: 0, aa: 0, aR: 0, ci: 0, ae: 0, G: 0, z: 0, ah: 0, w: 0, aZ: 0, am: 0, s: 0, cA: 'auto'};
 var rtfeldman$elm_css$Css$stringsToValue = function (list) {
-	return elm$core$List$isEmpty(list) ? {cx: 'none'} : {
-		cx: A2(
+	return elm$core$List$isEmpty(list) ? {cA: 'none'} : {
+		cA: A2(
 			elm$core$String$join,
 			', ',
 			A2(
@@ -8533,7 +8594,7 @@ var rtfeldman$elm_css$Css$height = rtfeldman$elm_css$Css$prop1('height');
 var rtfeldman$elm_css$Css$margin2 = rtfeldman$elm_css$Css$prop2('margin');
 var rtfeldman$elm_css$Css$maxWidth = rtfeldman$elm_css$Css$prop1('max-width');
 var rtfeldman$elm_css$Css$minHeight = rtfeldman$elm_css$Css$prop1('min-height');
-var rtfeldman$elm_css$Css$monospace = {I: 0, cx: 'monospace'};
+var rtfeldman$elm_css$Css$monospace = {M: 0, cA: 'monospace'};
 var rtfeldman$elm_css$Css$PercentageUnits = 0;
 var rtfeldman$elm_css$Css$pct = A2(rtfeldman$elm_css$Css$Internal$lengthConverter, 0, '%');
 var rtfeldman$elm_css$Css$qt = function (str) {
@@ -8731,7 +8792,7 @@ var author$project$Examples$Main$view = function (model) {
 											[
 												rtfeldman$elm_css$Css$qt('IBM Plex Mono'),
 												function ($) {
-												return $.cx;
+												return $.cA;
 											}(rtfeldman$elm_css$Css$monospace)
 											]))
 									]))
@@ -8836,7 +8897,7 @@ var elm$core$String$contains = _String_contains;
 var elm$core$String$toInt = _String_toInt;
 var elm$url$Url$Url = F6(
 	function (protocol, host, port_, path, query, fragment) {
-		return {bx: fragment, by: host, bH: path, bJ: port_, bM: protocol, bN: query};
+		return {bv: fragment, bx: host, bG: path, bI: port_, bL: protocol, bM: query};
 	});
 var elm$url$Url$chompBeforePath = F5(
 	function (protocol, path, params, frag, str) {
@@ -9422,14 +9483,14 @@ var rtfeldman$elm_css$VirtualDom$Styled$toUnstyled = function (vdom) {
 var rtfeldman$elm_css$Html$Styled$toUnstyled = rtfeldman$elm_css$VirtualDom$Styled$toUnstyled;
 var author$project$Examples$Main$main = elm$browser$Browser$element(
 	{
-		ce: function (_n0) {
+		ch: function (_n0) {
 			return author$project$Examples$Main$init;
 		},
-		cr: function (_n1) {
+		cu: function (_n1) {
 			return elm$core$Platform$Sub$none;
 		},
-		cu: author$project$Examples$Main$update,
-		cy: A2(elm$core$Basics$composeR, author$project$Examples$Main$view, rtfeldman$elm_css$Html$Styled$toUnstyled)
+		cx: author$project$Examples$Main$update,
+		cB: A2(elm$core$Basics$composeR, author$project$Examples$Main$view, rtfeldman$elm_css$Html$Styled$toUnstyled)
 	});
 _Platform_export({'Examples':{'Main':{'init':author$project$Examples$Main$main(
 	elm$json$Json$Decode$succeed(0))(0)}}});}(this));
